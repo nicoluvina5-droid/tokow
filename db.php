@@ -183,10 +183,36 @@ if (!class_exists('TokowJSONDB')) {
             if (preg_match('/UPDATE\s+`?suscripciones`?\s+SET\s+estado\s*=\s*\'Expirada\'\s+WHERE\s+id_usuario\s*=\s*(\d+)/i', $sql, $matches)) {
                 $uid = (int)$matches[1];
                 foreach ($data['suscripciones'] as &$s) {
-                    if ((int)$s['id_usuario'] === $uid && $s['estado'] === 'Activa') {
+                    if ((int)$s['id_usuario'] === $uid && isset($s['estado']) && $s['estado'] === 'Activa') {
                         $s['estado'] = 'Expirada';
                     }
                 }
+                $this->saveData($data);
+                return true;
+            }
+            if (preg_match('/INSERT\s+INTO\s+`?suscripciones`?/i', $sql)) {
+                $max_id = 0;
+                foreach ($data['suscripciones'] as $s) {
+                    if ($s['id_suscripcion'] > $max_id) $max_id = $s['id_suscripcion'];
+                }
+                $new_id = $max_id + 1;
+                $uid = 0;
+                $plan_id = 1;
+                if (preg_match('/VALUES\s*\(\s*(\d+)\s*,\s*(\d+)/i', $sql, $m_vals)) {
+                    $uid = (int)$m_vals[1];
+                    $plan_id = (int)$m_vals[2];
+                }
+                $new_sub = [
+                    'id_suscripcion' => $new_id,
+                    'id_usuario'     => $uid,
+                    'id_plan'        => $plan_id,
+                    'fecha_inicio'   => date('Y-m-d'),
+                    'fecha_fin'      => date('Y-m-d', strtotime('+1 month')),
+                    'estado'         => 'Activa',
+                    'metodo_pago'    => 'Tokow Pay (Simulado)'
+                ];
+                $data['suscripciones'][] = $new_sub;
+                $this->insert_id = $new_id;
                 $this->saveData($data);
                 return true;
             }
@@ -453,25 +479,41 @@ if (!class_exists('TokowJSONStmt')) {
                 return new TokowResultArray($rows);
             }
 
-            if (preg_match('/SELECT.*FROM\s+`?suscripciones`?.*WHERE\s+s\.id_usuario\s*=\s*\?/i', $this->sql)) {
+            if (preg_match('/SELECT.*FROM\s+`?suscripciones`?/i', $this->sql)) {
                 $target_uid = (int)(isset($this->params[0]) ? $this->params[0] : 0);
                 $rows = [];
                 foreach ($data['suscripciones'] as $s) {
                     if ((int)$s['id_usuario'] === $target_uid && isset($s['estado']) && $s['estado'] === 'Activa') {
-                        $plan_nombre = 'Suscripción Normal Mensual';
+                        $plan_obj = null;
+                        $target_plan_id = isset($s['id_plan']) ? (int)$s['id_plan'] : 1;
                         foreach ($data['planes'] as $pl) {
-                            if ($pl['id_plan'] == $s['id_plan']) {
-                                $plan_nombre = $pl['nombre'];
+                            if ((int)$pl['id_plan'] === $target_plan_id) {
+                                $plan_obj = $pl;
                                 break;
                             }
                         }
+
                         $rows[] = [
-                            'id_suscripcion' => $s['id_suscripcion'],
-                            'plan_nombre' => $plan_nombre,
-                            'fecha_fin' => $s['fecha_fin']
+                            'id_suscripcion'   => (int)$s['id_suscripcion'],
+                            'id_usuario'       => (int)$s['id_usuario'],
+                            'id_plan'          => $target_plan_id,
+                            'fecha_inicio'     => isset($s['fecha_inicio']) ? $s['fecha_inicio'] : date('Y-m-d'),
+                            'fecha_fin'        => isset($s['fecha_fin']) ? $s['fecha_fin'] : date('Y-m-d', strtotime('+1 month')),
+                            'estado'           => $s['estado'],
+                            'metodo_pago'      => isset($s['metodo_pago']) ? $s['metodo_pago'] : 'Tokow Pay (Simulado)',
+                            'plan_nombre'      => $plan_obj ? $plan_obj['nombre'] : 'Suscripción Normal Mensual',
+                            'precio'           => $plan_obj ? (float)$plan_obj['precio'] : 10.00,
+                            'duracion_meses'   => $plan_obj ? (int)$plan_obj['duracion_meses'] : 1,
+                            'max_dispositivos' => $plan_obj ? (int)$plan_obj['max_dispositivos'] : 1,
+                            'calidad_stream'   => $plan_obj ? $plan_obj['calidad_stream'] : '1080p 60fps'
                         ];
                     }
                 }
+
+                usort($rows, function($a, $b) {
+                    return (int)$b['id_suscripcion'] - (int)$a['id_suscripcion'];
+                });
+
                 return new TokowResultArray($rows);
             }
 

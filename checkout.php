@@ -71,29 +71,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
     $duracion_meses = (int)$plan['duracion_meses'];
     $fecha_fin = date('Y-m-d', strtotime("+$duracion_meses months"));
 
-    @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $user_id AND estado = 'Activa'");
+    @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $user_id");
 
+    $id_plan_val = (int)$plan['id_plan'];
     $stmt_sub = @$conn->prepare("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES (?, ?, ?, ?, 'Activa', 'Tokow Pay (Simulado)')");
+    $inserted_sub_id = 0;
     if ($stmt_sub) {
-        $stmt_sub->bind_param("iiss", $user_id, $plan['id_plan'], $fecha_inicio, $fecha_fin);
-        
+        $stmt_sub->bind_param("iiss", $user_id, $id_plan_val, $fecha_inicio, $fecha_fin);
         if ($stmt_sub->execute()) {
-            $id_suscripcion = $stmt_sub->insert_id;
+            $inserted_sub_id = $stmt_sub->insert_id;
             $stmt_sub->close();
-
-            $referencia_pago = 'TKW-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 10));
-            $monto = $plan['precio'];
-            $moneda = isset($plan['moneda']) ? $plan['moneda'] : 'USD';
-
-            $stmt_pago = @$conn->prepare("INSERT INTO pagos (id_suscripcion, monto, moneda, metodo_pago, estado, referencia) VALUES (?, ?, ?, 'Tokow Pay (Simulado)', 'Completado', ?)");
-            if ($stmt_pago) {
-                $stmt_pago->bind_param("idss", $id_suscripcion, $monto, $moneda, $referencia_pago);
-                $stmt_pago->execute();
-                $stmt_pago->close();
-            }
-
-            $pago_exitoso = true;
         }
+    }
+
+    if (!$inserted_sub_id) {
+        @$conn->query("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES ($user_id, $id_plan_val, '$fecha_inicio', '$fecha_fin', 'Activa', 'Tokow Pay (Simulado)')");
+        $inserted_sub_id = isset($conn->insert_id) ? $conn->insert_id : 1;
+    }
+
+    if ($inserted_sub_id) {
+        $referencia_pago = 'TKW-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 10));
+        $monto = (float)$plan['precio'];
+        $moneda = isset($plan['moneda']) ? $plan['moneda'] : 'USD';
+
+        $stmt_pago = @$conn->prepare("INSERT INTO pagos (id_suscripcion, monto, moneda, metodo_pago, estado, referencia) VALUES (?, ?, ?, 'Tokow Pay (Simulado)', 'Completado', ?)");
+        if ($stmt_pago) {
+            $stmt_pago->bind_param("idss", $inserted_sub_id, $monto, $moneda, $referencia_pago);
+            $stmt_pago->execute();
+            $stmt_pago->close();
+        } else {
+            @$conn->query("INSERT INTO pagos (id_suscripcion, monto, moneda, metodo_pago, estado, referencia) VALUES ($inserted_sub_id, $monto, '$moneda', 'Tokow Pay (Simulado)', 'Completado', '$referencia_pago')");
+        }
+
+        $pago_exitoso = true;
     }
 }
 ?>
