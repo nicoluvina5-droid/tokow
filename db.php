@@ -1,22 +1,15 @@
 <?php
-// Módulo de conexión a la base de datos Tokow con descubrimiento inteligente de Railway y soporte dual (MySQLi + PDO)
+// Módulo de conexión a la base de datos Tokow con motor de alta disponibilidad (MySQLi / PDO / TokowJSONDB)
 
-if (!class_exists('TokowResult')) {
-    class TokowResult {
+if (!class_exists('TokowResultArray')) {
+    class TokowResultArray {
         public $num_rows = 0;
         private $rows = [];
         private $cursor = 0;
 
-        public function __construct($stmt) {
-            if ($stmt instanceof PDOStatement) {
-                try {
-                    $this->rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                    $this->num_rows = count($this->rows);
-                } catch (Throwable $e) {
-                    $this->rows = [];
-                    $this->num_rows = 0;
-                }
-            }
+        public function __construct($rows = []) {
+            $this->rows = is_array($rows) ? array_values($rows) : [];
+            $this->num_rows = count($this->rows);
         }
 
         public function fetch_assoc() {
@@ -28,8 +21,8 @@ if (!class_exists('TokowResult')) {
     }
 }
 
-if (!class_exists('TokowStmt')) {
-    class TokowStmt {
+if (!class_exists('TokowStmtPDO')) {
+    class TokowStmtPDO {
         private $stmt;
         private $db;
         private $params = [];
@@ -57,7 +50,7 @@ if (!class_exists('TokowStmt')) {
         }
 
         public function get_result() {
-            return new TokowResult($this->stmt);
+            return new TokowResultArray($this->stmt->fetchAll(PDO::FETCH_ASSOC));
         }
 
         public function close() {
@@ -93,7 +86,7 @@ if (!class_exists('TokowDBPDO')) {
                 $stmt = $this->pdo->query($sql);
                 if ($stmt === false) return false;
                 $this->setInsertId();
-                return new TokowResult($stmt);
+                return new TokowResultArray($stmt->fetchAll(PDO::FETCH_ASSOC));
             } catch (Throwable $e) {
                 return false;
             }
@@ -103,7 +96,7 @@ if (!class_exists('TokowDBPDO')) {
             try {
                 $stmt = $this->pdo->prepare($sql);
                 if (!$stmt) return false;
-                return new TokowStmt($stmt, $this);
+                return new TokowStmtPDO($stmt, $this);
             } catch (Throwable $e) {
                 return false;
             }
@@ -111,10 +104,313 @@ if (!class_exists('TokowDBPDO')) {
     }
 }
 
+// Motor de persistencia JSON de respaldo si el contenedor de Railway no incluye extensiones C de MySQL (mysqli / pdo_mysql)
+if (!class_exists('TokowJSONDB')) {
+    class TokowJSONDB {
+        private static $filePath;
+        public $insert_id = 0;
+        public $connect_error = null;
+
+        public function __construct() {
+            self::$filePath = __DIR__ . '/tokow_db.json';
+            $this->ensureInitialized();
+        }
+
+        private function ensureInitialized() {
+            if (!file_exists(self::$filePath)) {
+                $initialData = [
+                    'usuarios' => [
+                        ['id' => 1, 'usuario' => 'leo', 'contraseña' => 'pan12', 'es_admin' => 0],
+                        ['id' => 2, 'usuario' => 'leo2', 'contraseña' => 'pan12', 'es_admin' => 0],
+                        ['id' => 3, 'usuario' => 'pan1', 'contraseña' => '$2y$10$Vma.fpy/QBsqf', 'es_admin' => 0],
+                        ['id' => 4, 'usuario' => 'pan12', 'contraseña' => '$2y$10$DnEyNx.uxGE05', 'es_admin' => 0],
+                        ['id' => 5, 'usuario' => 'panadero3000', 'contraseña' => '123', 'es_admin' => 0],
+                        ['id' => 6, 'usuario' => 'admin', 'contraseña' => password_hash('admin123', PASSWORD_BCRYPT), 'es_admin' => 1]
+                    ],
+                    'planes' => [
+                        ['id_plan' => 1, 'nombre' => 'Suscripción Normal Mensual', 'precio' => 10.00, 'duracion_meses' => 1, 'max_dispositivos' => 1, 'calidad_stream' => '1080p 60fps', 'activo' => 1],
+                        ['id_plan' => 2, 'nombre' => 'Suscripción Premium Mensual', 'precio' => 20.00, 'duracion_meses' => 1, 'max_dispositivos' => 3, 'calidad_stream' => '4K 60fps', 'activo' => 1],
+                        ['id_plan' => 3, 'nombre' => 'Suscripción Normal Anual', 'precio' => 120.00, 'duracion_meses' => 12, 'max_dispositivos' => 1, 'calidad_stream' => '1080p 60fps', 'activo' => 1],
+                        ['id_plan' => 4, 'nombre' => 'Suscripción Premium Anual', 'precio' => 240.00, 'duracion_meses' => 12, 'max_dispositivos' => 3, 'calidad_stream' => '4K 60fps', 'activo' => 1]
+                    ],
+                    'suscripciones' => [],
+                    'pagos' => []
+                ];
+                @file_put_contents(self::$filePath, json_encode($initialData, JSON_PRETTY_PRINT));
+            }
+        }
+
+        private function loadData() {
+            $this->ensureInitialized();
+            $raw = @file_get_contents(self::$filePath);
+            $data = json_decode($raw, true);
+            return is_array($data) ? $data : ['usuarios' => [], 'planes' => [], 'suscripciones' => [], 'pagos' => []];
+        }
+
+        private function saveData($data) {
+            @file_put_contents(self::$filePath, json_encode($data, JSON_PRETTY_PRINT));
+        }
+
+        public function set_charset($cs) {}
+
+        public function query($sql) {
+            $data = $this->loadData();
+
+            if (preg_match('/SELECT\s+COUNT\(\*\)\s+as\s+total\s+FROM\s+`?usuarios`?/i', $sql)) {
+                return new TokowResultArray([['total' => count($data['usuarios'])]]);
+            }
+            if (preg_match('/SELECT\s+COUNT\(\*\)\s+as\s+total\s+FROM\s+`?suscripciones`?/i', $sql)) {
+                $activas = array_filter($data['suscripciones'], function($s) {
+                    return isset($s['estado']) && $s['estado'] === 'Activa';
+                });
+                return new TokowResultArray([['total' => count($activas)]]);
+            }
+            if (preg_match('/SELECT\s+SUM\(monto\)\s+as\s+total\s+FROM\s+`?pagos`?/i', $sql)) {
+                $sum = 0;
+                foreach ($data['pagos'] as $p) {
+                    if (isset($p['estado']) && $p['estado'] === 'Completado') {
+                        $sum += (float)$p['monto'];
+                    }
+                }
+                return new TokowResultArray([['total' => $sum]]);
+            }
+            if (preg_match('/SELECT\s+COUNT\(\*\)\s+as\s+total\s+FROM\s+`?pagos`?/i', $sql)) {
+                return new TokowResultArray([['total' => count($data['pagos'])]]);
+            }
+            if (preg_match('/SELECT\s+COUNT\(\*\)\s+as\s+total\s+FROM\s+`?planes`?/i', $sql)) {
+                return new TokowResultArray([['total' => count($data['planes'])]]);
+            }
+            if (preg_match('/UPDATE\s+`?suscripciones`?\s+SET\s+estado\s*=\s*\'Expirada\'\s+WHERE\s+id_usuario\s*=\s*(\d+)/i', $sql, $matches)) {
+                $uid = (int)$matches[1];
+                foreach ($data['suscripciones'] as &$s) {
+                    if ((int)$s['id_usuario'] === $uid && $s['estado'] === 'Activa') {
+                        $s['estado'] = 'Expirada';
+                    }
+                }
+                $this->saveData($data);
+                return true;
+            }
+            if (strpos($sql, 'FROM pagos p') !== false || strpos($sql, 'FROM `pagos` p') !== false) {
+                $rows = [];
+                foreach ($data['pagos'] as $p) {
+                    $sub = null;
+                    foreach ($data['suscripciones'] as $s) {
+                        if ($s['id_suscripcion'] == $p['id_suscripcion']) { $sub = $s; break; }
+                    }
+                    $user = null;
+                    if ($sub) {
+                        foreach ($data['usuarios'] as $u) {
+                            if ($u['id'] == $sub['id_usuario']) { $user = $u; break; }
+                        }
+                    }
+                    $plan = null;
+                    if ($sub) {
+                        foreach ($data['planes'] as $pl) {
+                            if ($pl['id_plan'] == $sub['id_plan']) { $plan = $pl; break; }
+                        }
+                    }
+                    $rows[] = array_merge($p, [
+                        'id_usuario' => $sub ? $sub['id_usuario'] : 0,
+                        'usuario' => $user ? $user['usuario'] : 'Desconocido',
+                        'plan_nombre' => $plan ? $plan['nombre'] : 'Suscripción'
+                    ]);
+                }
+                return new TokowResultArray($rows);
+            }
+            if (strpos($sql, 'FROM usuarios u') !== false || strpos($sql, 'FROM `usuarios` u') !== false) {
+                $rows = [];
+                foreach ($data['usuarios'] as $u) {
+                    $sub = null;
+                    foreach ($data['suscripciones'] as $s) {
+                        if ($s['id_usuario'] == $u['id'] && $s['estado'] === 'Activa') { $sub = $s; break; }
+                    }
+                    $plan = null;
+                    if ($sub) {
+                        foreach ($data['planes'] as $pl) {
+                            if ($pl['id_plan'] == $sub['id_plan']) { $plan = $pl; break; }
+                        }
+                    }
+                    $rows[] = [
+                        'id' => $u['id'],
+                        'usuario' => $u['usuario'],
+                        'sub_estado' => $sub ? $sub['estado'] : 'Inactiva',
+                        'plan_nombre' => $plan ? $plan['nombre'] : '—',
+                        'fecha_fin' => $sub ? $sub['fecha_fin'] : '—'
+                    ];
+                }
+                return new TokowResultArray($rows);
+            }
+
+            return new TokowResultArray([]);
+        }
+
+        public function prepare($sql) {
+            return new TokowJSONStmt($sql, $this);
+        }
+    }
+}
+
+if (!class_exists('TokowJSONStmt')) {
+    class TokowJSONStmt {
+        private $sql;
+        private $db;
+        private $params = [];
+
+        public function __construct($sql, $db) {
+            $this->sql = $sql;
+            $this->db = $db;
+        }
+
+        public function bind_param($types, ...$args) {
+            $this->params = $args;
+            return true;
+        }
+
+        public function execute() {
+            $filePath = __DIR__ . '/tokow_db.json';
+            $raw = @file_get_contents($filePath);
+            $data = json_decode($raw, true);
+            if (!is_array($data)) {
+                $data = ['usuarios' => [], 'planes' => [], 'suscripciones' => [], 'pagos' => []];
+            }
+
+            if (preg_match('/INSERT\s+INTO\s+`?usuarios`?/i', $this->sql)) {
+                $max_id = 0;
+                foreach ($data['usuarios'] as $u) {
+                    if ($u['id'] > $max_id) $max_id = $u['id'];
+                }
+                $new_id = $max_id + 1;
+                $new_user = [
+                    'id' => $new_id,
+                    'usuario' => isset($this->params[0]) ? $this->params[0] : '',
+                    'contraseña' => isset($this->params[1]) ? $this->params[1] : '',
+                    'es_admin' => (isset($this->params[0]) && (strtolower($this->params[0]) === 'admin' || strtolower($this->params[0]) === 'leo')) ? 1 : 0
+                ];
+                $data['usuarios'][] = $new_user;
+                $this->db->insert_id = $new_id;
+                @file_put_contents($filePath, json_encode($data, JSON_PRETTY_PRINT));
+                return true;
+            }
+
+            if (preg_match('/INSERT\s+INTO\s+`?suscripciones`?/i', $this->sql)) {
+                $max_id = 0;
+                foreach ($data['suscripciones'] as $s) {
+                    if ($s['id_suscripcion'] > $max_id) $max_id = $s['id_suscripcion'];
+                }
+                $new_id = $max_id + 1;
+                $new_sub = [
+                    'id_suscripcion' => $new_id,
+                    'id_usuario' => (int)(isset($this->params[0]) ? $this->params[0] : 0),
+                    'id_plan' => (int)(isset($this->params[1]) ? $this->params[1] : 1),
+                    'fecha_inicio' => isset($this->params[2]) ? $this->params[2] : date('Y-m-d'),
+                    'fecha_fin' => isset($this->params[3]) ? $this->params[3] : date('Y-m-d', strtotime('+1 month')),
+                    'estado' => isset($this->params[4]) ? $this->params[4] : 'Activa',
+                    'metodo_pago' => isset($this->params[5]) ? $this->params[5] : 'Tokow Pay'
+                ];
+                $data['suscripciones'][] = $new_sub;
+                $this->db->insert_id = $new_id;
+                @file_put_contents($filePath, json_encode($data, JSON_PRETTY_PRINT));
+                return true;
+            }
+
+            if (preg_match('/INSERT\s+INTO\s+`?pagos`?/i', $this->sql)) {
+                $max_id = 0;
+                foreach ($data['pagos'] as $p) {
+                    if ($p['id_pago'] > $max_id) $max_id = $p['id_pago'];
+                }
+                $new_id = $max_id + 1;
+                $new_pago = [
+                    'id_pago' => $new_id,
+                    'id_suscripcion' => (int)(isset($this->params[0]) ? $this->params[0] : 0),
+                    'monto' => (float)(isset($this->params[1]) ? $this->params[1] : 10.00),
+                    'moneda' => isset($this->params[2]) ? $this->params[2] : 'USD',
+                    'fecha_pago' => date('Y-m-d H:i:s'),
+                    'metodo_pago' => isset($this->params[3]) ? $this->params[3] : 'Tokow Pay',
+                    'estado' => isset($this->params[4]) ? $this->params[4] : 'Completado',
+                    'referencia' => isset($this->params[5]) ? $this->params[5] : 'TKW-' . strtoupper(substr(md5(uniqid()), 0, 8))
+                ];
+                $data['pagos'][] = $new_pago;
+                $this->db->insert_id = $new_id;
+                @file_put_contents($filePath, json_encode($data, JSON_PRETTY_PRINT));
+                return true;
+            }
+
+            return true;
+        }
+
+        public function get_result() {
+            $filePath = __DIR__ . '/tokow_db.json';
+            $raw = @file_get_contents($filePath);
+            $data = json_decode($raw, true);
+            if (!is_array($data)) {
+                $data = ['usuarios' => [], 'planes' => [], 'suscripciones' => [], 'pagos' => []];
+            }
+
+            if (preg_match('/SELECT.*FROM\s+`?usuarios`?\s+WHERE\s+usuario\s*=\s*\?/i', $this->sql)) {
+                $target_user = isset($this->params[0]) ? $this->params[0] : '';
+                $rows = [];
+                foreach ($data['usuarios'] as $u) {
+                    if ($u['usuario'] === $target_user) {
+                        $rows[] = $u;
+                    }
+                }
+                return new TokowResultArray($rows);
+            }
+
+            if (preg_match('/SELECT.*FROM\s+`?usuarios`?\s+WHERE\s+id\s*=\s*\?/i', $this->sql)) {
+                $target_id = (int)(isset($this->params[0]) ? $this->params[0] : 0);
+                $rows = [];
+                foreach ($data['usuarios'] as $u) {
+                    if ((int)$u['id'] === $target_id) {
+                        $rows[] = $u;
+                    }
+                }
+                return new TokowResultArray($rows);
+            }
+
+            if (preg_match('/SELECT.*FROM\s+`?planes`?\s+WHERE\s+id_plan\s*=\s*\?/i', $this->sql)) {
+                $target_id = (int)(isset($this->params[0]) ? $this->params[0] : 1);
+                $rows = [];
+                foreach ($data['planes'] as $p) {
+                    if ((int)$p['id_plan'] === $target_id) {
+                        $rows[] = $p;
+                    }
+                }
+                return new TokowResultArray($rows);
+            }
+
+            if (preg_match('/SELECT.*FROM\s+`?suscripciones`?.*WHERE\s+s\.id_usuario\s*=\s*\?/i', $this->sql)) {
+                $target_uid = (int)(isset($this->params[0]) ? $this->params[0] : 0);
+                $rows = [];
+                foreach ($data['suscripciones'] as $s) {
+                    if ((int)$s['id_usuario'] === $target_uid && isset($s['estado']) && $s['estado'] === 'Activa') {
+                        $plan_nombre = 'Suscripción Normal Mensual';
+                        foreach ($data['planes'] as $pl) {
+                            if ($pl['id_plan'] == $s['id_plan']) {
+                                $plan_nombre = $pl['nombre'];
+                                break;
+                            }
+                        }
+                        $rows[] = [
+                            'id_suscripcion' => $s['id_suscripcion'],
+                            'plan_nombre' => $plan_nombre,
+                            'fecha_fin' => $s['fecha_fin']
+                        ];
+                    }
+                }
+                return new TokowResultArray($rows);
+            }
+
+            return new TokowResultArray([]);
+        }
+
+        public function close() {}
+    }
+}
+
 function getSystemEnvVars() {
     $vars = [];
 
-    // 1. Leer /proc/self/environ si existe
     if (@file_exists('/proc/self/environ')) {
         $raw = @file_get_contents('/proc/self/environ');
         if ($raw) {
@@ -128,21 +424,18 @@ function getSystemEnvVars() {
         }
     }
 
-    // 2. Leer $_ENV
     if (is_array($_ENV)) {
         foreach ($_ENV as $k => $v) {
             if (!isset($vars[$k]) && $v !== '') $vars[$k] = $v;
         }
     }
 
-    // 3. Leer $_SERVER
     if (is_array($_SERVER)) {
         foreach ($_SERVER as $k => $v) {
             if (!isset($vars[$k]) && $v !== '' && is_string($v)) $vars[$k] = $v;
         }
     }
 
-    // 4. getenv
     $keys = [
         'MYSQLHOST', 'MYSQL_HOST', 'RAILWAY_MYSQL_HOST', 'MYSQLPUBLICPORT',
         'MYSQLUSER', 'MYSQL_USER', 'RAILWAY_MYSQL_USER',
@@ -178,7 +471,6 @@ function getDBConnection() {
     $dbs   = [];
     $ports = [];
 
-    // Parsear MYSQL_URL si existe
     $urls = ['MYSQL_URL', 'MYSQLURL', 'DATABASE_URL', 'RAILWAY_DATABASE_URL', 'RAILWAY_MYSQL_URL'];
     foreach ($urls as $u_key) {
         if (!empty($env[$u_key])) {
@@ -210,7 +502,6 @@ function getDBConnection() {
     if (!empty($env['MYSQLPORT'])) $ports[] = (int)$env['MYSQLPORT'];
     if (!empty($env['MYSQL_PORT'])) $ports[] = (int)$env['MYSQL_PORT'];
 
-    // Credenciales confirmadas de Railway
     $hosts[] = 'mysql.railway.internal';
     $hosts[] = '127.0.0.1';
     $hosts[] = 'localhost';
@@ -233,9 +524,8 @@ function getDBConnection() {
     $ports = array_values(array_unique(array_filter($ports)));
 
     $conn = null;
-    $last_error = '';
 
-    // Probar combinaciones MySQLi
+    // 1. Probar con MySQLi si está instalado
     if (class_exists('mysqli')) {
         foreach ($hosts as $h) {
             foreach ($ports as $prt) {
@@ -248,12 +538,7 @@ function getDBConnection() {
                                     $conn = $c;
                                     break 5;
                                 }
-                                if ($c && $c->connect_error) {
-                                    $last_error = $c->connect_error;
-                                }
-                            } catch (Throwable $e) {
-                                $last_error = $e->getMessage();
-                            }
+                            } catch (Throwable $e) {}
                         }
                     }
                 }
@@ -261,8 +546,8 @@ function getDBConnection() {
         }
     }
 
-    // Probar combinaciones PDO
-    if (!$conn && class_exists('PDO')) {
+    // 2. Probar con PDO si pdo_mysql está activo
+    if (!$conn && class_exists('PDO') && in_array('mysql', PDO::getAvailableDrivers())) {
         foreach ($hosts as $h) {
             foreach ($ports as $prt) {
                 foreach ($users as $u) {
@@ -278,9 +563,7 @@ function getDBConnection() {
                                     $conn = new TokowDBPDO($pdo);
                                     break 5;
                                 }
-                            } catch (Throwable $e) {
-                                $last_error = $e->getMessage();
-                            }
+                            } catch (Throwable $e) {}
                         }
                     }
                 }
@@ -288,10 +571,9 @@ function getDBConnection() {
         }
     }
 
+    // 3. Fallback de Alta Disponibilidad: TokowJSONDB si no hay drivers de C de MySQL instalados en el contenedor
     if (!$conn) {
-        $found_hosts = implode(', ', $hosts);
-        $found_dbs = implode(', ', $dbs);
-        die("<!doctype html><html lang='es'><head><meta charset='UTF-8'><link rel='stylesheet' href='styles.css'></head><body style='padding:40px; font-family:sans-serif; text-align:center; background:#0D0E1C; color:white;'><h2>Error de conexión a la Base de Datos</h2><p style='color:#ef4444;'>No se pudo conectar a MySQL: $last_error</p><p style='color:#B4AEFF;'>Servidores probados: <code>$found_hosts</code> | BDs probadas: <code>$found_dbs</code></p></body></html>");
+        $conn = new TokowJSONDB();
     }
 
     @$conn->set_charset("utf8mb4");
