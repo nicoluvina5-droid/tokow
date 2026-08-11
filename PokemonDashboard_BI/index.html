@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokémon BI Dashboard</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="poke-ball">⚡</div>
+    <h1>Pokémon BI</h1>
+    <p>Simulación de seguridad RLS para el usuario final.</p>
+
+    <label>Rol de acceso</label>
+    <select id="roleSelect" class="form-select">
+      <option value="admin">Admin - ve todo el histórico</option>
+      <option value="basico">Básico - solo Ruta 1 y Bosque Verde</option>
+      <option value="zona">Zona Safari - solo Zona Safari</option>
+    </select>
+
+    <button class="btn btn-warning w-100 mt-3" id="enterBtn">
+      Entrar al dashboard
+    </button>
+  </div>
+</div>
+
+<div class="app-shell d-none" id="appShell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div>
+        <h1>Pokémon BI</h1>
+        <span>End-to-End Analytics</span>
+      </div>
+    </div>
+
+    <div class="role-box">
+      <p class="small-title">Seguridad RLS</p>
+      <p class="mb-1">Rol actual:</p>
+      <strong id="currentRole">Admin</strong>
+      <button class="btn btn-outline-warning btn-sm w-100 mt-3" id="changeRoleBtn">
+        Cambiar rol
+      </button>
+    </div>
+
+    <div class="upload-box">
+      <p class="small-title">Carga de datos</p>
+      <label>Tabla de hechos</label>
+      <input class="form-control form-control-sm" type="file" id="factFile" accept=".csv">
+
+      <label class="mt-2">Dimensión Pokémon</label>
+      <input class="form-control form-control-sm" type="file" id="dimFile" accept=".csv">
+
+      <button class="btn btn-warning btn-sm w-100 mt-3" id="autoBtn">
+        <i class="bi bi-folder2-open"></i> Cargar desde /data
+      </button>
+    </div>
+
+    <div class="filters">
+      <p class="small-title">Filtros OLAP</p>
+
+      <label>Entrenador</label>
+      <select id="trainerFilter" class="form-select form-select-sm"></select>
+
+      <label>Zona</label>
+      <select id="zoneFilter" class="form-select form-select-sm"></select>
+
+      <label>Capturado</label>
+      <select id="capturedFilter" class="form-select form-select-sm">
+        <option value="all">Todos</option>
+        <option value="true">Capturados</option>
+        <option value="false">No capturados</option>
+      </select>
+
+      <label>Pokémon</label>
+      <input id="pokemonSearch" class="form-control form-control-sm" placeholder="Ej. Pikachu">
+
+      <label>Año</label>
+      <select id="yearFilter" class="form-select form-select-sm"></select>
+
+      <label>Mes</label>
+      <select id="monthFilter" class="form-select form-select-sm"></select>
+
+      <label>Nivel mínimo</label>
+      <input id="minLevel" class="form-control form-control-sm" type="number" min="1" max="100" value="1">
+
+      <label>Nivel máximo</label>
+      <input id="maxLevel" class="form-control form-control-sm" type="number" min="1" max="100" value="100">
+
+      <button class="btn btn-outline-light btn-sm w-100 mt-3" id="resetBtn">
+        Limpiar filtros
+      </button>
+    </div>
+  </aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h2>Cuadro de Mando Pokémon</h2>
+        <p>ETL desde API REST + modelo estrella + métricas calculadas + RLS simulado + drill-through.</p>
+      </div>
+      <div class="status-pill" id="status">Esperando CSV...</div>
+    </header>
+
+    <section class="model-card">
+      <div>
+        <h3>Modelo estrella usado</h3>
+        <p><b>Hechos:</b> fact_encounters | <b>Dimensiones:</b> dim_pokemon, dim_tiempo, dim_zona, dim_entrenador</p>
+      </div>
+      <div class="model-flow">
+        <span>dim_pokemon</span>
+        <span>dim_tiempo</span>
+        <strong>fact_encounters</strong>
+        <span>dim_zona</span>
+        <span>dim_entrenador</span>
+      </div>
+    </section>
+
+    <section class="kpi-grid">
+      <div class="kpi-card"><i class="bi bi-database"></i><span>Encuentros</span><strong id="kpiEncounters">0</strong></div>
+      <div class="kpi-card"><i class="bi bi-disc"></i><span>Pokémon únicos</span><strong id="kpiUnique">0</strong></div>
+      <div class="kpi-card"><i class="bi bi-check-circle"></i><span>Capturados</span><strong id="kpiCaptured">0</strong></div>
+      <div class="kpi-card"><i class="bi bi-percent"></i><span>% captura</span><strong id="kpiRate">0%</strong></div>
+      <div class="kpi-card"><i class="bi bi-lightning-charge"></i><span>CP promedio</span><strong id="kpiCP">0</strong></div>
+      <div class="kpi-card"><i class="bi bi-graph-up-arrow"></i><span>Crecimiento mensual</span><strong id="kpiGrowth">0%</strong></div>
+    </section>
+
+    <section class="chart-grid">
+      <div class="chart-card">
+        <div class="card-title-row">
+          <h3>Capturas por zona</h3>
+          <small>Clic en barra = drill-through</small>
+        </div>
+        <div id="chartZone"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="card-title-row">
+          <h3>Top 10 Pokémon</h3>
+          <small>Clic en barra = detalle</small>
+        </div>
+        <div id="chartTop"></div>
+      </div>
+
+      <div class="chart-card wide"><h3>Encuentros por fecha</h3><div id="chartTimeline"></div></div>
+      <div class="chart-card"><h3>Distribución de niveles</h3><div id="chartLevels"></div></div>
+      <div class="chart-card"><h3>Capturados vs no capturados</h3><div id="chartCaptured"></div></div>
+      <div class="chart-card wide"><h3>Nivel vs Combat Power</h3><div id="chartScatter"></div></div>
+      <div class="chart-card wide"><h3>Matriz OLAP: Capturas por entrenador y zona</h3><div id="chartHeatmap"></div></div>
+    </section>
+
+    <section class="table-card">
+      <div class="table-header">
+        <h3>Datos filtrados</h3>
+        <input id="tableSearch" class="form-control form-control-sm" placeholder="Buscar en tabla...">
+      </div>
+      <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle">
+          <thead>
+            <tr>
+              <th>ID</th><th>Pokémon</th><th>Entrenador</th><th>Zona</th>
+              <th>Nivel</th><th>CP</th><th>Capturado</th><th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody id="dataTable"></tbody>
+        </table>
+      </div>
+      <p class="table-note" id="tableNote">Mostrando máximo 150 filas.</p>
+    </section>
+  </main>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title" id="detailTitle">Drill-through</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-kpis" id="detailKpis"></div>
+        <div id="detailChart" style="height:360px"></div>
+        <div class="table-responsive mt-3">
+          <table class="table table-dark table-sm table-hover">
+            <thead>
+              <tr><th>ID</th><th>Pokémon</th><th>Entrenador</th><th>Zona</th><th>Nivel</th><th>CP</th><th>Capturado</th><th>Fecha</th></tr>
+            </thead>
+            <tbody id="detailTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
