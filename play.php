@@ -1,10 +1,19 @@
 <?php
 session_start();
+require_once 'db.php';
+
 // Si no existe la sesión, redirigir al login obligatoriamente
-if (!isset($_SESSION['usuario'])) {
-    header("Location: login.php");
+if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
+    header("Location: login.php?msg=login_required&redirect=play.php");
     exit();
 }
+
+$conn = getDBConnection();
+$usuario_id = $_SESSION['usuario_id'];
+$es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
+
+// Verificar si el usuario cuenta con suscripción activa
+$suscripcion_activa = usuarioTieneSuscripcionActiva($conn, $usuario_id);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -553,6 +562,9 @@ video {
             <div class="user-tag">
                 🎮 @<?php echo htmlspecialchars($_SESSION['usuario']); ?>
             </div>
+            <?php if ($es_admin): ?>
+                <a href="admin.php" style="color: var(--accent); font-weight: 600; text-decoration: none; font-size: 13px;">Admin Dashboard</a>
+            <?php endif; ?>
             <a href="logout.php" class="logout-link">Cerrar Sesión</a>
 
             <div class="connection-badge" id="hud-status">
@@ -653,16 +665,28 @@ video {
                         <div class="splash-icon">
                             <img src="logo.png" alt="Logo" class="splash-logo">
                         </div>
-                        <h2>Esperando conexión</h2>
-                        <p>Establece la conexión de señalización para recibir el flujo de video interactivo del Host en tiempo real.</p>
+                        <?php if ($suscripcion_activa): ?>
+                            <h2>Esperando conexión</h2>
+                            <p>Suscripción activa: <strong><?php echo is_array($suscripcion_activa) ? htmlspecialchars($suscripcion_activa['plan_nombre']) : 'Membresía Tokow'; ?></strong></p>
+                            <p>Establece la conexión de señalización para recibir el flujo de video interactivo en tiempo real.</p>
 
-                        <div class="status-message-box" id="splash-status-message">
-                            Estado: Listo para conectar.
-                        </div>
+                            <div class="status-message-box" id="splash-status-message">
+                                Estado: Listo para conectar.
+                            </div>
 
-                        <button class="btn" id="splash-action-btn">
-                            <span>Conectar Consola</span>
-                        </button>
+                            <button class="btn" id="splash-action-btn">
+                                <span>Conectar Consola</span>
+                            </button>
+                        <?php else: ?>
+                            <h2 style="color: #fca5a5;">Suscripción Requerida</h2>
+                            <p style="margin-bottom: 16px;">Para acceder al streaming de videojuegos de alta velocidad necesitas una membresía activa en Tokow Pay.</p>
+                            <div class="status-message-box" style="border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">
+                                Acceso bloqueado: Sin suscripción activa ($10 USD o $20 USD).
+                            </div>
+                            <a href="precios.php" class="btn" style="text-decoration: none; margin-top: 12px;">
+                                🚀 Elegir Plan e Ir a Pasarela de Pago
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

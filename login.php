@@ -1,27 +1,25 @@
 <?php
 session_start();
+require_once 'db.php';
 
-// Configuración de la base de datos
-$host = 'localhost';
-$db_user = 'root'; // Cambia por tu usuario de MySQL
-$db_pass = 'root'; // Cambia por tu contraseña de MySQL
-$db_name = 'users';
-
-$conn = new mysqli($host, $db_user, $db_pass, $db_name);
-
-if ($conn->connect_error) {
-    die("Error de conexión: " . $conn->connect_error);
-}
+$conn = getDBConnection();
 
 $error = '';
+$redirect = isset($_GET['redirect']) ? $_GET['redirect'] : 'play.php';
+
+// Si ya está logueado, redirigir
+if (isset($_SESSION['usuario'])) {
+    header("Location: " . $redirect);
+    exit();
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario = trim($_POST['usuario']);
     $contrasena = trim($_POST['contrasena']);
+    $redirect_target = isset($_POST['redirect']) && !empty($_POST['redirect']) ? $_POST['redirect'] : 'play.php';
 
     if (!empty($usuario) && !empty($contrasena)) {
-        // Usamos Prepared Statements para evitar Inyección SQL
-        $stmt = $conn->prepare("SELECT usuario, contraseña FROM usuarios WHERE usuario = ?");
+        $stmt = $conn->prepare("SELECT id, usuario, contraseña, es_admin FROM usuarios WHERE usuario = ?");
         $stmt->bind_param("s", $usuario);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -29,10 +27,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($result->num_rows === 1) {
             $row = $result->fetch_assoc();
             
-            // Si guardas contraseñas cifradas usa password_verify, de lo contrario comparación directa:
-            if ($contrasena === $row['contraseña']) {
+            // Verificar contraseña (soporta hash bcrypt y texto plano heredado)
+            $password_matches = password_verify($contrasena, $row['contraseña']) || ($contrasena === $row['contraseña']);
+
+            if ($password_matches) {
+                $_SESSION['usuario_id'] = $row['id'];
                 $_SESSION['usuario'] = $row['usuario'];
-                header("Location: play.php");
+                $_SESSION['es_admin'] = (int)$row['es_admin'];
+
+                header("Location: " . $redirect_target);
                 exit();
             } else {
                 $error = "Contraseña incorrecta.";
@@ -56,11 +59,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
-  /* Estilo rápido para la alerta de error adaptada a tu paleta */
   .auth-error {
     background: rgba(239, 68, 68, 0.1);
     border: 1px solid rgba(239, 68, 68, 0.3);
     color: #ef4444;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .auth-notice {
+    background: rgba(124, 111, 247, 0.15);
+    border: 1px solid rgba(124, 111, 247, 0.3);
+    color: var(--mint, #4DC8A3);
     padding: 12px;
     border-radius: 8px;
     font-size: 14px;
@@ -79,9 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </a>
     <nav class="nav-links">
       <a href="index.html">Inicio</a>
-      <a href="precios.html">Precios y servicios</a>
+      <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
       <a href="play.php">¡A Jugar!</a>
+      <?php if (isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1): ?>
+        <a href="admin.php" style="color: var(--mint);">Admin Dashboard</a>
+      <?php endif; ?>
     </nav>
     <div class="nav-cta">
       <a href="registro.php" class="btn btn-primary">Crear cuenta</a>
@@ -91,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </header>
 
 <main class="auth-shell">
-  <!-- Lado izquierdo (Diseño original del HTML) -->
+  <!-- Lado izquierdo -->
   <div class="auth-side">
     <div class="auth-side-content">
       <span class="eyebrow">Bienvenido de vuelta</span>
@@ -104,23 +119,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-  <!-- Lado derecho (Formulario con lógica PHP integrada) -->
+  <!-- Lado derecho -->
   <div class="auth-form-wrap">
     <form class="auth-form" method="POST" action="">
+      <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
       <span class="eyebrow">Acceso</span>
       <h1 style="margin-top:14px;">Inicia sesión</h1>
       <p>Introduce tus datos para continuar jugando.</p>
 
-      <!-- Mensaje de error de PHP (si existe) -->
+      <?php if (isset($_GET['msg']) && $_GET['msg'] === 'login_required'): ?>
+        <div class="auth-notice">Debes iniciar sesión para comprar una suscripción o acceder a los juegos.</div>
+      <?php endif; ?>
+
       <?php if (!empty($error)): ?>
         <div class="auth-error"><?php echo htmlspecialchars($error); ?></div>
       <?php endif; ?>
-
-      <div class="oauth-row">
-        <button type="button" class="oauth-btn">🟣 Google</button>
-        <button type="button" class="oauth-btn">◈ Discord</button>
-      </div>
-      <div class="divider">o con tu cuenta</div>
 
       <div class="field">
         <label for="usuario">Usuario</label>
@@ -131,17 +144,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input id="pass" name="contrasena" type="password" placeholder="••••••••" required autocomplete="current-password">
       </div>
 
-      <div class="field-inline">
-        <label class="check-row"><input type="checkbox"> Recordarme</label>
-        <a href="#" style="color:var(--mint); font-weight:600;">¿Olvidaste tu contraseña?</a>
-      </div>
-
       <button type="submit" class="btn btn-primary btn-block btn-lg">Iniciar sesión</button>
 
-      <p class="auth-switch">¿No tienes cuenta? <a href="registro.html">Regístrate gratis</a></p>
+      <p class="auth-switch">¿No tienes cuenta? <a href="registro.php?redirect=<?php echo urlencode($redirect); ?>">Regístrate gratis</a></p>
     </form>
   </div>
 </main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-bottom" style="border-top: 1px solid var(--border); padding-top: 20px;">
+      <span>© 2025 Tokow · Universidad Politécnica de Victoria</span>
+      <div class="footer-social">
+        <a href="https://www.instagram.com/tokow.oficial/" target="_blank" aria-label="Instagram">◎ Instagram</a>
+        <a href="https://www.facebook.com/profile.php?id=61592803082599" target="_blank" aria-label="Facebook">󰈌 Facebook</a>
+      </div>
+    </div>
+  </div>
+</footer>
 
 </body>
 </html>

@@ -25,7 +25,7 @@
       <nav class="nav-links">
         <a href="index.html" class="active">Inicio</a>
         <a href="index.html#como-funciona">Cómo funciona</a>
-        <a href="precios.html">Precios y servicios</a>
+        <a href="precios.php">Precios y servicios</a>
         <a href="nosotros.html">Acerca de</a>
         <a href="play.php">¡A Jugar!</a>
       </nav>
@@ -47,8 +47,8 @@
           <p class="lede">Tokow transmite videojuegos de alto rendimiento directo a tu pantalla — celular, laptop o TV —
             usando 5G y Edge Computing. Sin descargas, sin hardware costoso, sin excusas.</p>
           <div class="hero-actions">
-            <a href="registro.html" class="btn btn-primary btn-lg">Empezar gratis</a>
-            <a href="precios.html" class="btn btn-ghost btn-lg">Ver planes</a>
+            <a href="registro.php" class="btn btn-primary btn-lg">Empezar gratis</a>
+            <a href="precios.php" class="btn btn-ghost btn-lg">Ver planes</a>
           </div>
           <div class="hero-proof">
             <div><strong id="statLatency">18ms</strong><span>Latencia promedio</span></div>
@@ -254,41 +254,27 @@
         </div>
         <div class="pricing-grid">
           <div class="plan">
-            <h3>Básico</h3>
-            <div class="price">$99<span>MXN / mes</span></div>
-            <p class="price-note">1080p · 30fps</p>
+            <h3>Suscripción Normal</h3>
+            <div class="price">$10<span>USD / mes</span></div>
+            <p class="price-note">1080p · 60fps · 1 Dispositivo</p>
             <ul class="plan-feat">
               <li>✓ Acceso a 80+ juegos</li>
               <li>✓ 1 dispositivo a la vez</li>
-              <li>✓ Soporte por correo</li>
+              <li>✓ Soporte por correo 24/7</li>
             </ul>
-            <a href="https://buy.stripe.com/test_6oUdR82D1cEC3wz8p9dQQ00" class="btn btn-ghost btn-block">Elegir
-              Básico</a>
+            <a href="checkout.php?plan=normal_mensual" class="btn btn-ghost btn-block">Elegir Normal ($10 USD)</a>
           </div>
           <div class="plan featured">
             <span class="plan-tag">Más popular</span>
-            <h3>Pro</h3>
-            <div class="price">$179<span>MXN / mes</span></div>
-            <p class="price-note">1440p · 60fps</p>
+            <h3>Suscripción Premium</h3>
+            <div class="price">$20<span>USD / mes</span></div>
+            <p class="price-note">4K · 60fps · 3 Dispositivos</p>
             <ul class="plan-feat">
               <li>✓ Catálogo completo (200+)</li>
-              <li>✓ 2 dispositivos simultáneos</li>
-              <li>✓ Soporte prioritario 24/7</li>
-            </ul>
-            <a href="https://buy.stripe.com/test_6oUdR82D1cEC3wz8p9dQQ00" class="btn btn-primary btn-block">Elegir
-              Pro</a>
-          </div>
-          <div class="plan">
-            <h3>Elite</h3>
-            <div class="price">$269<span>MXN / mes</span></div>
-            <p class="price-note">4K · 60fps</p>
-            <ul class="plan-feat">
-              <li>✓ Catálogo completo + estrenos</li>
               <li>✓ 3 dispositivos simultáneos</li>
-              <li>✓ Latencia prioritaria en Edge</li>
+              <li>✓ Prioridad en Servidores Edge</li>
             </ul>
-            <a href="https://buy.stripe.com/test_6oUdR82D1cEC3wz8p9dQQ00" class="btn btn-ghost btn-block">Elegir
-              Elite</a>
+            <a href="checkout.php?plan=premium_mensual" class="btn btn-primary btn-block">Elegir Premium ($20 USD)</a>
           </div>
         </div>
       </div>
@@ -321,34 +307,30 @@
         <div class="footer-col">
           <h5>Producto</h5>
           <ul>
-            <li><a href="precios.html">Precios y servicios</a></li>
+            <li><a href="precios.php">Precios y servicios</a></li>
             <li><a href="index.html#como-funciona">Cómo funciona</a></li>
-            <li><a href="precios.html">Catálogo de juegos</a></li>
+            <li><a href="precios.php">Catálogo de juegos</a></li>
           </ul>
         </div>
         <div class="footer-col">
           <h5>Empresa</h5>
           <ul>
             <li><a href="nosotros.html">Acerca de nosotros</a></li>
-            <li><a href="nosotros.html">Nuestros valores</a></li>
-            <li><a href="#">Trabaja con nosotros</a></li>
           </ul>
         </div>
         <div class="footer-col">
           <h5>Cuenta</h5>
           <ul>
-            <li><a href="login.html">Iniciar sesión</a></li>
-            <li><a href="registro.html">Crear cuenta</a></li>
-            <li><a href="#">Soporte</a></li>
+            <li><a href="login.php">Iniciar sesión</a></li>
+            <li><a href="registro.php">Crear cuenta</a></li>
           </ul>
         </div>
       </div>
       <div class="footer-bottom">
         <span>© 2025 Tokow · Universidad Politécnica de Victoria</span>
         <div class="footer-social">
-          <a href="#" aria-label="X">𝕏</a>
-          <a href="#" aria-label="Instagram">◎</a>
-          <a href="#" aria-label="Discord">◈</a>
+          <a href="https://www.instagram.com/tokow.oficial/" target="_blank" aria-label="Instagram">◎ Instagram</a>
+          <a href="https://www.facebook.com/profile.php?id=61592803082599" target="_blank" aria-label="Facebook">󰈌 Facebook</a>
         </div>
       </div>
     </div>

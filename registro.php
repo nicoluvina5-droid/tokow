@@ -1,26 +1,17 @@
 <?php
 session_start();
+require_once 'db.php';
 
-// Configuración de la base de datos
-$host = 'localhost';
-$db_user = 'root'; 
-$db_pass = 'root';     
-$db_name = 'users';
-
-$conn = new mysqli($host, $db_user, $db_pass, $db_name);
-
-if ($conn->connect_error) {
-    die("Error de conexión: " . $conn->connect_error);
-}
+$conn = getDBConnection();
 
 $error = '';
+$redirect = isset($_GET['redirect']) ? $_GET['redirect'] : 'login.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario = trim($_POST['usuario']);
     $contrasena = trim($_POST['contrasena']);
 
     if (!empty($usuario) && !empty($contrasena)) {
-        
         // Verificar si el usuario ya existe
         $stmt_check = $conn->prepare("SELECT usuario FROM usuarios WHERE usuario = ?");
         $stmt_check->bind_param("s", $usuario);
@@ -33,15 +24,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $stmt_check->close();
 
-            // Insertar usuario y contraseña en la base de datos
+            // Hash de contraseña seguro
+            $hash_pass = password_hash($contrasena, PASSWORD_BCRYPT);
+
+            // Insertar nuevo usuario
             $stmt_insert = $conn->prepare("INSERT INTO usuarios (usuario, contraseña) VALUES (?, ?)");
-            $stmt_insert->bind_param("ss", $usuario, $contrasena);
+            $stmt_insert->bind_param("ss", $usuario, $hash_pass);
 
             if ($stmt_insert->execute()) {
+                $new_id = $stmt_insert->insert_id;
                 $stmt_insert->close();
                 
-                // Redirección al login tras registrar con éxito
-                header("Location: login.php");
+                // Auto-login tras el registro exitoso
+                $_SESSION['usuario_id'] = $new_id;
+                $_SESSION['usuario'] = $usuario;
+                $_SESSION['es_admin'] = 0;
+
+                $target = isset($_POST['redirect']) && !empty($_POST['redirect']) ? $_POST['redirect'] : 'precios.php';
+                header("Location: " . $target);
                 exit();
             } else {
                 $error = "Hubo un error al procesar el registro. Inténtalo de nuevo.";
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </a>
     <nav class="nav-links">
       <a href="index.html">Inicio</a>
-      <a href="precios.html">Precios y servicios</a>
+      <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
       <a href="play.php">¡A Jugar!</a>
     </nav>
@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </header>
 
 <main class="auth-shell">
-  <!-- Columna Lateral Izquierda (Diseño Visual) -->
+  <!-- Columna Lateral Izquierda -->
   <div class="auth-side">
     <div class="auth-side-content">
       <span class="eyebrow">Únete a Tokow</span>
@@ -106,27 +106,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
     <div class="hud" style="position:relative; width:fit-content;">
       <div class="hud-row"><span class="hud-dot"></span> 200+ JUEGOS</div>
-      <div class="hud-row">PRUEBA <span class="val">7 días gratis</span></div>
+      <div class="hud-row">ACCESO <span class="val">Inmediato</span></div>
     </div>
   </div>
 
-  <!-- Formulario Derecha (Integración con PHP) -->
+  <!-- Formulario Derecha -->
   <div class="auth-form-wrap">
     <form class="auth-form" method="POST" action="">
+      <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
       <span class="eyebrow">Registro</span>
       <h1 style="margin-top:14px;">Crea tu cuenta</h1>
       <p>Menos de un minuto para tu primer juego en la nube.</p>
 
-      <!-- Alerta de error si falla la validación o el registro -->
       <?php if (!empty($error)): ?>
         <div class="auth-error"><?php echo htmlspecialchars($error); ?></div>
       <?php endif; ?>
-
-      <div class="oauth-row">
-        <button type="button" class="oauth-btn">🟣 Google</button>
-        <button type="button" class="oauth-btn">◈ Discord</button>
-      </div>
-      <div class="divider">o con tu usuario</div>
 
       <div class="field">
         <label for="user">Usuario</label>
@@ -135,9 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <div class="field">
         <label for="pass2">Contraseña</label>
-        <input id="pass2" name="contrasena" type="password" placeholder="Mínimo 8 caracteres" required autocomplete="new-password">
-        <div class="password-strength"><span></span><span></span><span></span><span></span></div>
-        <p class="field-note">Usa letras, números y al menos un símbolo.</p>
+        <input id="pass2" name="contrasena" type="password" placeholder="Mínimo 6 caracteres" required autocomplete="new-password">
       </div>
 
       <div class="field-inline">
@@ -146,10 +138,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <button type="submit" class="btn btn-primary btn-block btn-lg">Crear cuenta gratis</button>
 
-      <p class="auth-switch">¿Ya tienes cuenta? <a href="login.php">Inicia sesión</a></p>
+      <p class="auth-switch">¿Ya tienes cuenta? <a href="login.php?redirect=<?php echo urlencode($redirect); ?>">Inicia sesión</a></p>
     </form>
   </div>
 </main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-bottom" style="border-top: 1px solid var(--border); padding-top: 20px;">
+      <span>© 2025 Tokow · Universidad Politécnica de Victoria</span>
+      <div class="footer-social">
+        <a href="https://www.instagram.com/tokow.oficial/" target="_blank" aria-label="Instagram">◎ Instagram</a>
+        <a href="https://www.facebook.com/profile.php?id=61592803082599" target="_blank" aria-label="Facebook">󰈌 Facebook</a>
+      </div>
+    </div>
+  </div>
+</footer>
 
 </body>
 </html>
