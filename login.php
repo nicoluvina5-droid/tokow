@@ -5,9 +5,8 @@ require_once 'db.php';
 $conn = getDBConnection();
 
 $error = '';
-$redirect = isset($_GET['redirect']) ? $_GET['redirect'] : 'play.php';
+$redirect = isset($_GET['redirect']) ? $_GET['redirect'] : 'precios.php';
 
-// Si ya está logueado, redirigir
 if (isset($_SESSION['usuario'])) {
     header("Location: " . $redirect);
     exit();
@@ -16,11 +15,10 @@ if (isset($_SESSION['usuario'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario = trim($_POST['usuario']);
     $contrasena = trim($_POST['contrasena']);
-    $redirect_target = isset($_POST['redirect']) && !empty($_POST['redirect']) ? $_POST['redirect'] : 'play.php';
+    $redirect_target = isset($_POST['redirect']) && !empty($_POST['redirect']) ? $_POST['redirect'] : 'precios.php';
 
     if (!empty($usuario) && !empty($contrasena)) {
-        // Consulta compatible con la tabla usuarios exacta (id, usuario, contraseña)
-        $stmt = $conn->prepare("SELECT id, usuario, contraseña FROM usuarios WHERE usuario = ?");
+        $stmt = @$conn->prepare("SELECT id, usuario, contraseña FROM usuarios WHERE usuario = ?");
         if ($stmt) {
             $stmt->bind_param("s", $usuario);
             $stmt->execute();
@@ -29,7 +27,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($result && $result->num_rows === 1) {
                 $row = $result->fetch_assoc();
                 
-                // Verificar contraseña (acepta hashes bcrypt o texto plano heredado)
                 $password_matches = password_verify($contrasena, $row['contraseña']) || ($contrasena === $row['contraseña']);
 
                 if ($password_matches) {
@@ -100,7 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <a href="index.php">Inicio</a>
       <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
-      <a href="play.php">¡A Jugar!</a>
     </nav>
     <div class="nav-cta">
       <a href="registro.php" class="btn btn-primary">Crear cuenta</a>
@@ -130,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <p>Introduce tus datos para continuar jugando.</p>
 
       <?php if (isset($_GET['msg']) && $_GET['msg'] === 'login_required'): ?>
-        <div class="auth-notice">Debes iniciar sesión para comprar una suscripción o acceder a los juegos.</div>
+        <div class="auth-notice">Debes iniciar sesión para comprar una suscripción o acceder a los servicios.</div>
       <?php endif; ?>
 
       <?php if (!empty($error)): ?>

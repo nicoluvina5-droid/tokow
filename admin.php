@@ -4,7 +4,6 @@ require_once 'db.php';
 
 $conn = getDBConnection();
 
-// Verificar autenticación
 if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
     header("Location: login.php?msg=login_required&redirect=admin.php");
     exit();
@@ -18,20 +17,19 @@ if (!$es_admin) {
     die("<!doctype html><html lang='es'><head><link rel='stylesheet' href='styles.css'></head><body style='padding:40px; text-align:center;'><h2>Acceso Denegado</h2><p>Solo los administradores tienen permiso para ingresar a este panel.</p><a href='index.php' class='btn btn-primary'>Volver al Inicio</a></body></html>");
 }
 
-// Acción de administración: Conceder o Cancelar Suscripción de prueba
 $msg_admin = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_admin'])) {
     $target_user_id = (int)$_POST['target_user_id'];
     $action = $_POST['action_admin'];
 
     if ($action === 'grant_premium' && $target_user_id) {
-        $id_plan = 2; // Premium Mensual
+        $id_plan = 2;
         @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
         $fin = date('Y-m-d', strtotime('+1 month'));
         @$conn->query("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES ($target_user_id, $id_plan, CURDATE(), '$fin', 'Activa', 'Admin Granted')");
         $msg_admin = "Se otorgó la Suscripción Premium al usuario ID #$target_user_id con éxito.";
     } elseif ($action === 'grant_normal' && $target_user_id) {
-        $id_plan = 1; // Normal Mensual
+        $id_plan = 1;
         @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
         $fin = date('Y-m-d', strtotime('+1 month'));
         @$conn->query("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES ($target_user_id, $id_plan, CURDATE(), '$fin', 'Activa', 'Admin Granted')");
@@ -42,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_admin'])) {
     }
 }
 
-// Consultas compatibles con el esquema SQL exacto del dump
 $res_users = @$conn->query("SELECT COUNT(*) as total FROM usuarios");
 $total_usuarios = $res_users ? (int)$res_users->fetch_assoc()['total'] : 0;
 
@@ -55,7 +52,6 @@ $total_ingresos = $res_rev ? (float)($res_rev->fetch_assoc()['total'] ?: 0) : 0;
 $res_pagos_count = @$conn->query("SELECT COUNT(*) as total FROM pagos");
 $total_pagos = $res_pagos_count ? (int)$res_pagos_count->fetch_assoc()['total'] : 0;
 
-// Histórico de pagos
 $res_ultimos_pagos = @$conn->query("SELECT p.*, s.id_usuario, u.usuario, pl.nombre as plan_nombre 
     FROM pagos p 
     JOIN suscripciones s ON p.id_suscripcion = s.id_suscripcion 
@@ -63,7 +59,6 @@ $res_ultimos_pagos = @$conn->query("SELECT p.*, s.id_usuario, u.usuario, pl.nomb
     JOIN planes pl ON s.id_plan = pl.id_plan 
     ORDER BY p.id_pago DESC LIMIT 10");
 
-// Lista de usuarios y suscripción (usando solo id y usuario)
 $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_estado, pl.nombre as plan_nombre, s.fecha_fin 
     FROM usuarios u 
     LEFT JOIN suscripciones s ON u.id = s.id_usuario AND s.estado = 'Activa' 
@@ -186,7 +181,7 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
     <span class="badge-admin">DASHBOARD DE PLATAFORMA</span>
   </div>
   <div style="display:flex; align-items:center; gap:16px;">
-    <a href="play.php" class="btn btn-ghost" style="padding: 8px 16px; font-size: 13px;">🎮 Ir a la App (Play)</a>
+    <a href="precios.php" class="btn btn-ghost" style="padding: 8px 16px; font-size: 13px;">Ver Precios</a>
     <a href="logout.php" style="color: #ef4444; text-decoration: none; font-size: 13px;">Cerrar Sesión</a>
   </div>
 </header>
@@ -213,7 +208,7 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
     <div class="stat-card">
       <span style="font-size: 13px; color: var(--muted); text-transform: uppercase;">Suscripciones Activas</span>
       <div class="stat-number green"><?php echo number_format($total_suscripciones_activas); ?></div>
-      <span style="font-size: 12px; color: var(--muted);">Usuarios con acceso play</span>
+      <span style="font-size: 12px; color: var(--muted);">Usuarios con acceso</span>
     </div>
 
     <div class="stat-card">

@@ -6,7 +6,6 @@ $conn = getDBConnection();
 $usuario_logueado = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : null;
 $es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
 
-// Verificar si el usuario ya tiene suscripción activa
 $suscripcion_activa = null;
 if (isset($_SESSION['usuario_id'])) {
     $suscripcion_activa = usuarioTieneSuscripcionActiva($conn, (int)$_SESSION['usuario_id']);
@@ -66,7 +65,6 @@ if (isset($_SESSION['usuario_id'])) {
         <a href="index.php">Inicio</a>
         <a href="precios.php" class="active">Precios y servicios</a>
         <a href="nosotros.html">Acerca de</a>
-        <a href="play.php">¡A Jugar!</a>
         <?php if ($es_admin): ?>
           <a href="admin.php" style="color: var(--mint);">Admin Dashboard</a>
         <?php endif; ?>
@@ -100,7 +98,7 @@ if (isset($_SESSION['usuario_id'])) {
             <div>
               <strong>Suscripción Actual:</strong> <span style="color: var(--mint);"><?php echo htmlspecialchars($suscripcion_activa['plan_nombre']); ?></span> (Activa hasta: <?php echo htmlspecialchars($suscripcion_activa['fecha_fin']); ?>)
             </div>
-            <a href="play.php" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Ir a Jugar 🚀</a>
+            <span class="btn btn-primary" style="padding: 8px 16px; font-size: 13px; cursor: default;">Activa ✓</span>
           </div>
         <?php endif; ?>
 
@@ -115,7 +113,6 @@ if (isset($_SESSION['usuario_id'])) {
 
         <!-- PLANES MENSUALES ($10 / $20) -->
         <div class="plan-grid-container" id="monthlyPlans">
-          <!-- PLAN NORMAL MENSUAL -->
           <div class="plan">
             <h3>Suscripción Normal</h3>
             <div class="price">$10<span>USD / mes</span></div>
@@ -129,7 +126,6 @@ if (isset($_SESSION['usuario_id'])) {
             <a href="checkout.php?plan=normal_mensual" class="btn btn-ghost btn-block">Elegir Suscripción Normal</a>
           </div>
 
-          <!-- PLAN PREMIUM MENSUAL -->
           <div class="plan featured">
             <span class="plan-tag">Más recomendado</span>
             <h3>Suscripción Premium</h3>
@@ -147,7 +143,6 @@ if (isset($_SESSION['usuario_id'])) {
 
         <!-- PLANES ANUALES ($120 / $240) -->
         <div class="plan-grid-container" id="annualPlans" style="display: none;">
-          <!-- PLAN NORMAL ANUAL -->
           <div class="plan">
             <h3>Suscripción Normal (Anual)</h3>
             <div class="price">$120<span>USD / año</span></div>
@@ -161,7 +156,6 @@ if (isset($_SESSION['usuario_id'])) {
             <a href="checkout.php?plan=normal_anual" class="btn btn-ghost btn-block">Elegir Normal Anual ($120)</a>
           </div>
 
-          <!-- PLAN PREMIUM ANUAL -->
           <div class="plan featured">
             <span class="plan-tag">Mejor valor</span>
             <h3>Suscripción Premium (Anual)</h3>

@@ -14,10 +14,9 @@ if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
 $user_id = (int)$_SESSION['usuario_id'];
 $usuario = $_SESSION['usuario'];
 
-// Obtener plan seleccionado sin depender de la columna 'codigo'
 $plan_type = isset($_GET['plan']) ? trim($_GET['plan']) : 'normal_mensual';
 
-$id_plan = 1; // Normal Mensual por defecto
+$id_plan = 1;
 if ($plan_type === 'premium_mensual' || $plan_type === '2') {
     $id_plan = 2;
 } elseif ($plan_type === 'normal_anual' || $plan_type === '3') {
@@ -28,7 +27,7 @@ if ($plan_type === 'premium_mensual' || $plan_type === '2') {
     $id_plan = 1;
 }
 
-$stmt_plan = $conn->prepare("SELECT * FROM planes WHERE id_plan = ?");
+$stmt_plan = @$conn->prepare("SELECT * FROM planes WHERE id_plan = ?");
 if ($stmt_plan) {
     $stmt_plan->bind_param("i", $id_plan);
     $stmt_plan->execute();
@@ -37,7 +36,6 @@ if ($stmt_plan) {
     $stmt_plan->close();
 }
 
-// Fallback por si la tabla planes no tuviese esa fila aún
 if (!$plan) {
     $plan_nombres = [
         1 => 'Suscripción Normal Mensual',
@@ -68,16 +66,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
     $nombre_titular = trim($_POST['card_name']);
     $numero_tarjeta = trim($_POST['card_number']);
     
-    // Calcular fechas
     $fecha_inicio = date('Y-m-d');
     $duracion_meses = (int)$plan['duracion_meses'];
     $fecha_fin = date('Y-m-d', strtotime("+$duracion_meses months"));
 
-    // Desactivar suscripciones anteriores activas
     @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $user_id AND estado = 'Activa'");
 
-    // Insertar nueva suscripción en la tabla exacta suscripciones
-    $stmt_sub = $conn->prepare("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES (?, ?, ?, ?, 'Activa', 'Tokow Pay (Simulado)')");
+    $stmt_sub = @$conn->prepare("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES (?, ?, ?, ?, 'Activa', 'Tokow Pay (Simulado)')");
     if ($stmt_sub) {
         $stmt_sub->bind_param("iiss", $user_id, $plan['id_plan'], $fecha_inicio, $fecha_fin);
         
@@ -85,12 +80,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
             $id_suscripcion = $stmt_sub->insert_id;
             $stmt_sub->close();
 
-            // Registrar el pago en la tabla exacta pagos
             $referencia_pago = 'TKW-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 10));
             $monto = $plan['precio'];
             $moneda = isset($plan['moneda']) ? $plan['moneda'] : 'USD';
 
-            $stmt_pago = $conn->prepare("INSERT INTO pagos (id_suscripcion, monto, moneda, metodo_pago, estado, referencia) VALUES (?, ?, ?, 'Tokow Pay (Simulado)', 'Completado', ?)");
+            $stmt_pago = @$conn->prepare("INSERT INTO pagos (id_suscripcion, monto, moneda, metodo_pago, estado, referencia) VALUES (?, ?, ?, 'Tokow Pay (Simulado)', 'Completado', ?)");
             if ($stmt_pago) {
                 $stmt_pago->bind_param("idss", $id_suscripcion, $monto, $moneda, $referencia_pago);
                 $stmt_pago->execute();
@@ -257,7 +251,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
       <a href="index.php">Inicio</a>
       <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
-      <a href="play.php">¡A Jugar!</a>
     </nav>
     <div class="nav-cta">
       <span style="font-size: 14px; color: var(--lavender);">🎮 @<?php echo htmlspecialchars($usuario); ?></span>
@@ -271,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
       <div style="font-size: 50px; margin-bottom: 16px;">🎉</div>
       <span class="sim-badge">¡Pago Verificado y Exitoso!</span>
       <h1 style="margin-top: 8px;">¡Bienvenido a <?php echo htmlspecialchars($plan['nombre']); ?>!</h1>
-      <p style="color: var(--muted); margin: 16px 0;">Tu transacción simulada ha sido aprobada correctamente y se te han otorgado todos los accesos.</p>
+      <p style="color: var(--muted); margin: 16px 0;">Tu transacción simulada ha sido aprobada correctamente y se te ha otorgado la suscripción activa.</p>
       
       <div class="plan-summary-card" style="text-align: left; margin-bottom: 24px;">
         <div class="summary-line">
@@ -292,13 +285,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
         </div>
       </div>
 
-      <a href="play.php" class="btn btn-primary btn-block btn-lg" style="font-size: 16px;">🚀 Ir a la plataforma (¡A Jugar!)</a>
+      <a href="precios.php" class="btn btn-primary btn-block btn-lg" style="font-size: 16px;">Ver Estado de Suscripción</a>
     </div>
   <?php else: ?>
     <div style="text-align: center; margin-top: 24px;">
       <span class="sim-badge">⚡ Pasarela de Pago Simulada Tokow Pay</span>
       <h1>Finaliza tu suscripción</h1>
-      <p style="color: var(--muted);">Estás a un paso de desbloquear el máximo rendimiento de Cloud Gaming.</p>
+      <p style="color: var(--muted);">Estás a un paso de activar tu membresía de Cloud Gaming.</p>
     </div>
 
     <div class="checkout-shell">

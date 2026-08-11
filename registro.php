@@ -5,15 +5,14 @@ require_once 'db.php';
 $conn = getDBConnection();
 
 $error = '';
-$redirect = isset($_GET['redirect']) ? $_GET['redirect'] : 'login.php';
+$redirect = isset($_GET['redirect']) ? $_GET['redirect'] : 'precios.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario = trim($_POST['usuario']);
     $contrasena = trim($_POST['contrasena']);
 
     if (!empty($usuario) && !empty($contrasena)) {
-        // Verificar si el usuario ya existe
-        $stmt_check = $conn->prepare("SELECT usuario FROM usuarios WHERE usuario = ?");
+        $stmt_check = @$conn->prepare("SELECT usuario FROM usuarios WHERE usuario = ?");
         if ($stmt_check) {
             $stmt_check->bind_param("s", $usuario);
             $stmt_check->execute();
@@ -25,27 +24,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $stmt_check->close();
 
-                // Intentar con hash bcrypt
                 $hash_pass = password_hash($contrasena, PASSWORD_BCRYPT);
 
-                $stmt_insert = $conn->prepare("INSERT INTO usuarios (usuario, contraseña) VALUES (?, ?)");
+                $stmt_insert = @$conn->prepare("INSERT INTO usuarios (usuario, contraseña) VALUES (?, ?)");
                 if ($stmt_insert) {
                     $stmt_insert->bind_param("ss", $usuario, $hash_pass);
                     $success = @$stmt_insert->execute();
 
                     if (!$success) {
-                        // Fallback si la columna 'contraseña' tiene un límite corto varchar(20) y falló el hash largo
                         $stmt_insert->close();
-                        $stmt_insert = $conn->prepare("INSERT INTO usuarios (usuario, contraseña) VALUES (?, ?)");
+                        $stmt_insert = @$conn->prepare("INSERT INTO usuarios (usuario, contraseña) VALUES (?, ?)");
                         $stmt_insert->bind_param("ss", $usuario, $contrasena);
-                        $success = $stmt_insert->execute();
+                        $success = @$stmt_insert->execute();
                     }
 
                     if ($success) {
                         $new_id = $stmt_insert->insert_id;
                         $stmt_insert->close();
                         
-                        // Auto-login tras el registro
                         $_SESSION['usuario_id'] = (int)$new_id;
                         $_SESSION['usuario'] = $usuario;
                         $_SESSION['es_admin'] = (strtolower($usuario) === 'admin' || strtolower($usuario) === 'leo') ? 1 : 0;
@@ -103,7 +99,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <a href="index.php">Inicio</a>
       <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
-      <a href="play.php">¡A Jugar!</a>
     </nav>
     <div class="nav-cta">
       <a href="login.php" class="btn btn-ghost">Iniciar sesión</a>

@@ -34,7 +34,6 @@ $es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
         <a href="index.php#como-funciona">Cómo funciona</a>
         <a href="precios.php">Precios y servicios</a>
         <a href="nosotros.html">Acerca de</a>
-        <a href="play.php">¡A Jugar!</a>
         <?php if ($es_admin): ?>
           <a href="admin.php" style="color: var(--mint);">Admin Dashboard</a>
         <?php endif; ?>
