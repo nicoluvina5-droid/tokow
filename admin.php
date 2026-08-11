@@ -4,18 +4,18 @@ require_once 'db.php';
 
 $conn = getDBConnection();
 
-// Verificar autenticación y rol de administrador
+// Verificar autenticación
 if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
     header("Location: login.php?msg=login_required&redirect=admin.php");
     exit();
 }
 
-$usuario_id = $_SESSION['usuario_id'];
-$es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
+$usuario_id = (int)$_SESSION['usuario_id'];
+$user_name = strtolower($_SESSION['usuario']);
+$es_admin = ($user_name === 'admin' || $user_name === 'leo' || (isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1));
 
-// Si no es admin explícito, verificar si el nombre de usuario es admin
-if (!$es_admin && strtolower($_SESSION['usuario']) !== 'admin') {
-    die("<!doctype html><html lang='es'><head><link rel='stylesheet' href='styles.css'></head><body style='padding:40px; text-align:center;'><h2>Acceso Denegado</h2><p>Solo los administradores tienen permiso para ingresar a este panel.</p><a href='index.html' class='btn btn-primary'>Volver al Inicio</a></body></html>");
+if (!$es_admin) {
+    die("<!doctype html><html lang='es'><head><link rel='stylesheet' href='styles.css'></head><body style='padding:40px; text-align:center;'><h2>Acceso Denegado</h2><p>Solo los administradores tienen permiso para ingresar a este panel.</p><a href='index.php' class='btn btn-primary'>Volver al Inicio</a></body></html>");
 }
 
 // Acción de administración: Conceder o Cancelar Suscripción de prueba
@@ -25,54 +25,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_admin'])) {
     $action = $_POST['action_admin'];
 
     if ($action === 'grant_premium' && $target_user_id) {
-        $stmt_p = $conn->query("SELECT id_plan FROM planes WHERE codigo = 'premium_mensual' LIMIT 1");
-        $id_plan = $stmt_p->fetch_assoc()['id_plan'];
-        
-        $conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
+        $id_plan = 2; // Premium Mensual
+        @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
         $fin = date('Y-m-d', strtotime('+1 month'));
-        $conn->query("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES ($target_user_id, $id_plan, CURDATE(), '$fin', 'Activa', 'Admin Granted')");
+        @$conn->query("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES ($target_user_id, $id_plan, CURDATE(), '$fin', 'Activa', 'Admin Granted')");
         $msg_admin = "Se otorgó la Suscripción Premium al usuario ID #$target_user_id con éxito.";
     } elseif ($action === 'grant_normal' && $target_user_id) {
-        $stmt_p = $conn->query("SELECT id_plan FROM planes WHERE codigo = 'normal_mensual' LIMIT 1");
-        $id_plan = $stmt_p->fetch_assoc()['id_plan'];
-        
-        $conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
+        $id_plan = 1; // Normal Mensual
+        @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
         $fin = date('Y-m-d', strtotime('+1 month'));
-        $conn->query("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES ($target_user_id, $id_plan, CURDATE(), '$fin', 'Activa', 'Admin Granted')");
+        @$conn->query("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES ($target_user_id, $id_plan, CURDATE(), '$fin', 'Activa', 'Admin Granted')");
         $msg_admin = "Se otorgó la Suscripción Normal al usuario ID #$target_user_id con éxito.";
     } elseif ($action === 'revoke' && $target_user_id) {
-        $conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
+        @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
         $msg_admin = "Se revocó la suscripción del usuario ID #$target_user_id.";
     }
 }
 
-// Consultas de métricas para el Dashboard
-// 1. Total usuarios
-$res_users = $conn->query("SELECT COUNT(*) as total FROM usuarios");
-$total_usuarios = $res_users ? $res_users->fetch_assoc()['total'] : 0;
+// Consultas compatibles con el esquema SQL exacto del dump
+$res_users = @$conn->query("SELECT COUNT(*) as total FROM usuarios");
+$total_usuarios = $res_users ? (int)$res_users->fetch_assoc()['total'] : 0;
 
-// 2. Suscripciones activas
-$res_subs = $conn->query("SELECT COUNT(*) as total FROM suscripciones WHERE estado = 'Activa' AND (fecha_fin IS NULL OR fecha_fin >= CURDATE())");
-$total_suscripciones_activas = $res_subs ? $res_subs->fetch_assoc()['total'] : 0;
+$res_subs = @$conn->query("SELECT COUNT(*) as total FROM suscripciones WHERE estado = 'Activa' AND (fecha_fin IS NULL OR fecha_fin >= CURDATE())");
+$total_suscripciones_activas = $res_subs ? (int)$res_subs->fetch_assoc()['total'] : 0;
 
-// 3. Ingresos totales simulados
-$res_rev = $conn->query("SELECT SUM(monto) as total FROM pagos WHERE estado = 'Completado'");
-$total_ingresos = $res_rev ? ($res_rev->fetch_assoc()['total'] ?: 0) : 0;
+$res_rev = @$conn->query("SELECT SUM(monto) as total FROM pagos WHERE estado = 'Completado'");
+$total_ingresos = $res_rev ? (float)($res_rev->fetch_assoc()['total'] ?: 0) : 0;
 
-// 4. Total de pagos procesados
-$res_pagos_count = $conn->query("SELECT COUNT(*) as total FROM pagos");
-$total_pagos = $res_pagos_count ? $res_pagos_count->fetch_assoc()['total'] : 0;
+$res_pagos_count = @$conn->query("SELECT COUNT(*) as total FROM pagos");
+$total_pagos = $res_pagos_count ? (int)$res_pagos_count->fetch_assoc()['total'] : 0;
 
-// 5. Histórico de Pagos Recientes
-$res_ultimos_pagos = $conn->query("SELECT p.*, s.id_usuario, u.usuario, pl.nombre as plan_nombre 
+// Histórico de pagos
+$res_ultimos_pagos = @$conn->query("SELECT p.*, s.id_usuario, u.usuario, pl.nombre as plan_nombre 
     FROM pagos p 
     JOIN suscripciones s ON p.id_suscripcion = s.id_suscripcion 
     JOIN usuarios u ON s.id_usuario = u.id 
     JOIN planes pl ON s.id_plan = pl.id_plan 
-    ORDER BY p.fecha_pago DESC LIMIT 10");
+    ORDER BY p.id_pago DESC LIMIT 10");
 
-// 6. Lista de Usuarios y Estado
-$res_lista_usuarios = $conn->query("SELECT u.id, u.usuario, u.es_admin, u.fecha_registro, s.estado as sub_estado, pl.nombre as plan_nombre, s.fecha_fin 
+// Lista de usuarios y suscripción (usando solo id y usuario)
+$res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_estado, pl.nombre as plan_nombre, s.fecha_fin 
     FROM usuarios u 
     LEFT JOIN suscripciones s ON u.id = s.id_usuario AND s.estado = 'Activa' 
     LEFT JOIN planes pl ON s.id_plan = pl.id_plan 
@@ -187,7 +179,7 @@ $res_lista_usuarios = $conn->query("SELECT u.id, u.usuario, u.es_admin, u.fecha_
 
 <header class="admin-header">
   <div style="display:flex; align-items:center; gap:16px;">
-    <a href="index.html" class="brand">
+    <a href="index.php" class="brand">
       <span class="brand-mark"></span>
       <span class="brand-text">Tokow Admin</span>
     </a>
@@ -211,7 +203,6 @@ $res_lista_usuarios = $conn->query("SELECT u.id, u.usuario, u.es_admin, u.fecha_
     </div>
   <?php endif; ?>
 
-  <!-- Tarjetas de Métricas -->
   <div class="admin-grid">
     <div class="stat-card">
       <span style="font-size: 13px; color: var(--muted); text-transform: uppercase;">Total Usuarios</span>
@@ -238,7 +229,6 @@ $res_lista_usuarios = $conn->query("SELECT u.id, u.usuario, u.es_admin, u.fecha_
     </div>
   </div>
 
-  <!-- Gestión de Usuarios y Membresías -->
   <div class="admin-section">
     <h3 style="margin-bottom: 8px;">Gestión de Usuarios y Estado de Suscripción</h3>
     <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">Permite verificar el plan activo de cada usuario u otorgar/revocar accesos directos para pruebas.</p>
@@ -263,7 +253,7 @@ $res_lista_usuarios = $conn->query("SELECT u.id, u.usuario, u.es_admin, u.fecha_
                 <td>#<?php echo $usr['id']; ?></td>
                 <td><strong>@<?php echo htmlspecialchars($usr['usuario']); ?></strong></td>
                 <td>
-                  <?php if ($usr['es_admin']): ?>
+                  <?php if (strtolower($usr['usuario']) === 'admin' || strtolower($usr['usuario']) === 'leo'): ?>
                     <span class="badge-admin">ADMIN</span>
                   <?php else: ?>
                     <span style="color: var(--muted);">Usuario</span>
@@ -298,7 +288,6 @@ $res_lista_usuarios = $conn->query("SELECT u.id, u.usuario, u.es_admin, u.fecha_
     </div>
   </div>
 
-  <!-- Histórico de Transacciones Simuladas -->
   <div class="admin-section">
     <h3 style="margin-bottom: 8px;">Histórico de Pagos (Tokow Pay)</h3>
     <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">Últimas 10 transacciones simuladas procesadas por la plataforma.</p>
@@ -323,7 +312,7 @@ $res_lista_usuarios = $conn->query("SELECT u.id, u.usuario, u.es_admin, u.fecha_
                 <td style="font-family: monospace; color: var(--mint);"><?php echo htmlspecialchars($pago['referencia']); ?></td>
                 <td>@<?php echo htmlspecialchars($pago['usuario']); ?></td>
                 <td><?php echo htmlspecialchars($pago['plan_nombre']); ?></td>
-                <td><strong>$<?php echo number_format($pago['monto'], 2); ?> <?php echo htmlspecialchars($pago['moneda']); ?></strong></td>
+                <td><strong>$<?php echo number_format($pago['monto'], 2); ?> USD</strong></td>
                 <td><?php echo htmlspecialchars($pago['metodo_pago']); ?></td>
                 <td><span class="badge-active"><?php echo htmlspecialchars($pago['estado']); ?></span></td>
                 <td><?php echo htmlspecialchars($pago['fecha_pago']); ?></td>

@@ -14,39 +14,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!empty($usuario) && !empty($contrasena)) {
         // Verificar si el usuario ya existe
         $stmt_check = $conn->prepare("SELECT usuario FROM usuarios WHERE usuario = ?");
-        $stmt_check->bind_param("s", $usuario);
-        $stmt_check->execute();
-        $result_check = $stmt_check->get_result();
+        if ($stmt_check) {
+            $stmt_check->bind_param("s", $usuario);
+            $stmt_check->execute();
+            $result_check = $stmt_check->get_result();
 
-        if ($result_check->num_rows > 0) {
-            $error = "El nombre de usuario ya está registrado.";
-            $stmt_check->close();
-        } else {
-            $stmt_check->close();
-
-            // Hash de contraseña seguro
-            $hash_pass = password_hash($contrasena, PASSWORD_BCRYPT);
-
-            // Insertar nuevo usuario
-            $stmt_insert = $conn->prepare("INSERT INTO usuarios (usuario, contraseña) VALUES (?, ?)");
-            $stmt_insert->bind_param("ss", $usuario, $hash_pass);
-
-            if ($stmt_insert->execute()) {
-                $new_id = $stmt_insert->insert_id;
-                $stmt_insert->close();
-                
-                // Auto-login tras el registro exitoso
-                $_SESSION['usuario_id'] = $new_id;
-                $_SESSION['usuario'] = $usuario;
-                $_SESSION['es_admin'] = 0;
-
-                $target = isset($_POST['redirect']) && !empty($_POST['redirect']) ? $_POST['redirect'] : 'precios.php';
-                header("Location: " . $target);
-                exit();
+            if ($result_check && $result_check->num_rows > 0) {
+                $error = "El nombre de usuario ya está registrado.";
+                $stmt_check->close();
             } else {
-                $error = "Hubo un error al procesar el registro. Inténtalo de nuevo.";
-                $stmt_insert->close();
+                $stmt_check->close();
+
+                // Intentar con hash bcrypt
+                $hash_pass = password_hash($contrasena, PASSWORD_BCRYPT);
+
+                $stmt_insert = $conn->prepare("INSERT INTO usuarios (usuario, contraseña) VALUES (?, ?)");
+                if ($stmt_insert) {
+                    $stmt_insert->bind_param("ss", $usuario, $hash_pass);
+                    $success = @$stmt_insert->execute();
+
+                    if (!$success) {
+                        // Fallback si la columna 'contraseña' tiene un límite corto varchar(20) y falló el hash largo
+                        $stmt_insert->close();
+                        $stmt_insert = $conn->prepare("INSERT INTO usuarios (usuario, contraseña) VALUES (?, ?)");
+                        $stmt_insert->bind_param("ss", $usuario, $contrasena);
+                        $success = $stmt_insert->execute();
+                    }
+
+                    if ($success) {
+                        $new_id = $stmt_insert->insert_id;
+                        $stmt_insert->close();
+                        
+                        // Auto-login tras el registro
+                        $_SESSION['usuario_id'] = (int)$new_id;
+                        $_SESSION['usuario'] = $usuario;
+                        $_SESSION['es_admin'] = (strtolower($usuario) === 'admin' || strtolower($usuario) === 'leo') ? 1 : 0;
+
+                        $target = isset($_POST['redirect']) && !empty($_POST['redirect']) ? $_POST['redirect'] : 'precios.php';
+                        header("Location: " . $target);
+                        exit();
+                    } else {
+                        $error = "Hubo un error al registrar el usuario en la base de datos.";
+                        $stmt_insert->close();
+                    }
+                } else {
+                    $error = "Error en la consulta de inserción.";
+                }
             }
+        } else {
+            $error = "Error al verificar la existencia del usuario.";
         }
     } else {
         $error = "Por favor, llena todos los campos.";
@@ -79,12 +95,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <header class="site-header">
   <div class="wrap nav">
-    <a href="index.html" class="brand">
+    <a href="index.php" class="brand">
       <span class="brand-mark"></span>
       <span class="brand-text">Tokow</span>
     </a>
     <nav class="nav-links">
-      <a href="index.html">Inicio</a>
+      <a href="index.php">Inicio</a>
       <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
       <a href="play.php">¡A Jugar!</a>
@@ -97,7 +113,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </header>
 
 <main class="auth-shell">
-  <!-- Columna Lateral Izquierda -->
   <div class="auth-side">
     <div class="auth-side-content">
       <span class="eyebrow">Únete a Tokow</span>
@@ -110,7 +125,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-  <!-- Formulario Derecha -->
   <div class="auth-form-wrap">
     <form class="auth-form" method="POST" action="">
       <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
@@ -129,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <div class="field">
         <label for="pass2">Contraseña</label>
-        <input id="pass2" name="contrasena" type="password" placeholder="Mínimo 6 caracteres" required autocomplete="new-password">
+        <input id="pass2" name="contrasena" type="password" placeholder="••••••••" required autocomplete="new-password">
       </div>
 
       <div class="field-inline">

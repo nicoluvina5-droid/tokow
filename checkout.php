@@ -11,25 +11,54 @@ if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
     exit();
 }
 
-$user_id = $_SESSION['usuario_id'];
+$user_id = (int)$_SESSION['usuario_id'];
 $usuario = $_SESSION['usuario'];
 
-// Obtener plan seleccionado
-$plan_code = isset($_GET['plan']) ? trim($_GET['plan']) : 'normal_mensual';
+// Obtener plan seleccionado sin depender de la columna 'codigo'
+$plan_type = isset($_GET['plan']) ? trim($_GET['plan']) : 'normal_mensual';
 
-$stmt_plan = $conn->prepare("SELECT * FROM planes WHERE codigo = ? AND activo = 1");
-$stmt_plan->bind_param("s", $plan_code);
-$stmt_plan->execute();
-$res_plan = $stmt_plan->get_result();
-$plan = $res_plan->fetch_assoc();
-$stmt_plan->close();
+$id_plan = 1; // Normal Mensual por defecto
+if ($plan_type === 'premium_mensual' || $plan_type === '2') {
+    $id_plan = 2;
+} elseif ($plan_type === 'normal_anual' || $plan_type === '3') {
+    $id_plan = 3;
+} elseif ($plan_type === 'premium_anual' || $plan_type === '4') {
+    $id_plan = 4;
+} elseif ($plan_type === 'normal_mensual' || $plan_type === '1') {
+    $id_plan = 1;
+}
 
+$stmt_plan = $conn->prepare("SELECT * FROM planes WHERE id_plan = ?");
+if ($stmt_plan) {
+    $stmt_plan->bind_param("i", $id_plan);
+    $stmt_plan->execute();
+    $res_plan = $stmt_plan->get_result();
+    $plan = $res_plan ? $res_plan->fetch_assoc() : null;
+    $stmt_plan->close();
+}
+
+// Fallback por si la tabla planes no tuviese esa fila aún
 if (!$plan) {
-    // Si no se encuentra, usar por defecto normal_mensual
-    $stmt_default = $conn->prepare("SELECT * FROM planes WHERE codigo = 'normal_mensual'");
-    $stmt_default->execute();
-    $plan = $stmt_default->get_result()->fetch_assoc();
-    $stmt_default->close();
+    $plan_nombres = [
+        1 => 'Suscripción Normal Mensual',
+        2 => 'Suscripción Premium Mensual',
+        3 => 'Suscripción Normal Anual',
+        4 => 'Suscripción Premium Anual'
+    ];
+    $plan_precios = [1 => 10.00, 2 => 20.00, 3 => 120.00, 4 => 240.00];
+    $plan_duracion = [1 => 1, 2 => 1, 3 => 12, 4 => 12];
+    $plan_dispositivos = [1 => 1, 2 => 3, 3 => 1, 4 => 3];
+    $plan_calidad = [1 => '1080p 60fps', 2 => '4K 60fps', 3 => '1080p 60fps', 4 => '4K 60fps'];
+
+    $plan = [
+        'id_plan' => $id_plan,
+        'nombre' => isset($plan_nombres[$id_plan]) ? $plan_nombres[$id_plan] : 'Suscripción Normal Mensual',
+        'precio' => isset($plan_precios[$id_plan]) ? $plan_precios[$id_plan] : 10.00,
+        'duracion_meses' => isset($plan_duracion[$id_plan]) ? $plan_duracion[$id_plan] : 1,
+        'max_dispositivos' => isset($plan_dispositivos[$id_plan]) ? $plan_dispositivos[$id_plan] : 1,
+        'calidad_stream' => isset($plan_calidad[$id_plan]) ? $plan_calidad[$id_plan] : '1080p 60fps',
+        'moneda' => 'USD'
+    ];
 }
 
 $pago_exitoso = false;
@@ -44,31 +73,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
     $duracion_meses = (int)$plan['duracion_meses'];
     $fecha_fin = date('Y-m-d', strtotime("+$duracion_meses months"));
 
-    // Cancelar cualquier suscripción previa activa para evitar duplicados
-    $stmt_cancel = $conn->prepare("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = ? AND estado = 'Activa'");
-    $stmt_cancel->bind_param("i", $user_id);
-    $stmt_cancel->execute();
-    $stmt_cancel->close();
+    // Desactivar suscripciones anteriores activas
+    @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $user_id AND estado = 'Activa'");
 
-    // Registrar nueva suscripción
+    // Insertar nueva suscripción en la tabla exacta suscripciones
     $stmt_sub = $conn->prepare("INSERT INTO suscripciones (id_usuario, id_plan, fecha_inicio, fecha_fin, estado, metodo_pago) VALUES (?, ?, ?, ?, 'Activa', 'Tokow Pay (Simulado)')");
-    $stmt_sub->bind_param("iiss", $user_id, $plan['id_plan'], $fecha_inicio, $fecha_fin);
-    
-    if ($stmt_sub->execute()) {
-        $id_suscripcion = $stmt_sub->insert_id;
-        $stmt_sub->close();
+    if ($stmt_sub) {
+        $stmt_sub->bind_param("iiss", $user_id, $plan['id_plan'], $fecha_inicio, $fecha_fin);
+        
+        if ($stmt_sub->execute()) {
+            $id_suscripcion = $stmt_sub->insert_id;
+            $stmt_sub->close();
 
-        // Registrar el pago
-        $referencia_pago = 'TKW-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 10));
-        $monto = $plan['precio'];
-        $moneda = $plan['moneda'];
+            // Registrar el pago en la tabla exacta pagos
+            $referencia_pago = 'TKW-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 10));
+            $monto = $plan['precio'];
+            $moneda = isset($plan['moneda']) ? $plan['moneda'] : 'USD';
 
-        $stmt_pago = $conn->prepare("INSERT INTO pagos (id_suscripcion, monto, moneda, metodo_pago, estado, referencia) VALUES (?, ?, ?, 'Tokow Pay (Simulado)', 'Completado', ?)");
-        $stmt_pago->bind_param("idss", $id_suscripcion, $monto, $moneda, $referencia_pago);
-        $stmt_pago->execute();
-        $stmt_pago->close();
+            $stmt_pago = $conn->prepare("INSERT INTO pagos (id_suscripcion, monto, moneda, metodo_pago, estado, referencia) VALUES (?, ?, ?, 'Tokow Pay (Simulado)', 'Completado', ?)");
+            if ($stmt_pago) {
+                $stmt_pago->bind_param("idss", $id_suscripcion, $monto, $moneda, $referencia_pago);
+                $stmt_pago->execute();
+                $stmt_pago->close();
+            }
 
-        $pago_exitoso = true;
+            $pago_exitoso = true;
+        }
     }
 }
 ?>
@@ -174,7 +204,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
     display: inline-block;
     margin-bottom: 16px;
   }
-  /* Processing Modal Overlay */
   .proc-modal {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -220,12 +249,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
 
 <header class="site-header">
   <div class="wrap nav">
-    <a href="index.html" class="brand">
+    <a href="index.php" class="brand">
       <span class="brand-mark"></span>
       <span class="brand-text">Tokow</span>
     </a>
     <nav class="nav-links">
-      <a href="index.html">Inicio</a>
+      <a href="index.php">Inicio</a>
       <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
       <a href="play.php">¡A Jugar!</a>
@@ -255,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
         </div>
         <div class="summary-line">
           <span>Monto Cobrado:</span>
-          <strong>$<?php echo number_format($plan['precio'], 2); ?> <?php echo htmlspecialchars($plan['moneda']); ?></strong>
+          <strong>$<?php echo number_format($plan['precio'], 2); ?> USD</strong>
         </div>
         <div class="summary-line">
           <span>Estado de Acceso:</span>
@@ -273,7 +302,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
     </div>
 
     <div class="checkout-shell">
-      <!-- Tarjeta visual y resumen -->
       <div class="card-preview-box">
         <div class="virtual-credit-card">
           <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -313,12 +341,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
           </div>
           <div class="summary-total">
             <span>Total a pagar</span>
-            <span>$<?php echo number_format($plan['precio'], 2); ?> <?php echo htmlspecialchars($plan['moneda']); ?></span>
+            <span>$<?php echo number_format($plan['precio'], 2); ?> USD</span>
           </div>
         </div>
       </div>
 
-      <!-- Formulario de Tarjeta -->
       <div class="payment-form-card">
         <h3 style="margin-bottom: 8px;">Datos de pago</h3>
         <p style="font-size: 13px; color: var(--muted); margin-bottom: 20px;">
@@ -350,7 +377,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
           </div>
 
           <button type="button" id="btnPagarSimulado" class="btn btn-primary btn-block btn-lg" style="margin-top: 12px;">
-            🔒 Simular Pago ($<?php echo number_format($plan['precio'], 2); ?> <?php echo htmlspecialchars($plan['moneda']); ?>)
+            🔒 Simular Pago ($<?php echo number_format($plan['precio'], 2); ?> USD)
           </button>
         </form>
       </div>
@@ -358,7 +385,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
   <?php endif; ?>
 </main>
 
-<!-- Modal de simulación de verificación de pago -->
 <div class="proc-modal" id="procModal">
   <div class="spinner-ring"></div>
   <h2 id="procTitle">Verificando pago...</h2>

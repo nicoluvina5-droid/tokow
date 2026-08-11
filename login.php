@@ -19,31 +19,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $redirect_target = isset($_POST['redirect']) && !empty($_POST['redirect']) ? $_POST['redirect'] : 'play.php';
 
     if (!empty($usuario) && !empty($contrasena)) {
-        $stmt = $conn->prepare("SELECT id, usuario, contraseña, es_admin FROM usuarios WHERE usuario = ?");
-        $stmt->bind_param("s", $usuario);
-        $stmt->execute();
-        $result = $stmt->get_result();
+        // Consulta compatible con la tabla usuarios exacta (id, usuario, contraseña)
+        $stmt = $conn->prepare("SELECT id, usuario, contraseña FROM usuarios WHERE usuario = ?");
+        if ($stmt) {
+            $stmt->bind_param("s", $usuario);
+            $stmt->execute();
+            $result = $stmt->get_result();
 
-        if ($result->num_rows === 1) {
-            $row = $result->fetch_assoc();
-            
-            // Verificar contraseña (soporta hash bcrypt y texto plano heredado)
-            $password_matches = password_verify($contrasena, $row['contraseña']) || ($contrasena === $row['contraseña']);
+            if ($result && $result->num_rows === 1) {
+                $row = $result->fetch_assoc();
+                
+                // Verificar contraseña (acepta hashes bcrypt o texto plano heredado)
+                $password_matches = password_verify($contrasena, $row['contraseña']) || ($contrasena === $row['contraseña']);
 
-            if ($password_matches) {
-                $_SESSION['usuario_id'] = $row['id'];
-                $_SESSION['usuario'] = $row['usuario'];
-                $_SESSION['es_admin'] = (int)$row['es_admin'];
+                if ($password_matches) {
+                    $_SESSION['usuario_id'] = (int)$row['id'];
+                    $_SESSION['usuario'] = $row['usuario'];
 
-                header("Location: " . $redirect_target);
-                exit();
+                    $is_admin = (strtolower($row['usuario']) === 'admin' || strtolower($row['usuario']) === 'leo');
+                    $_SESSION['es_admin'] = $is_admin ? 1 : 0;
+
+                    header("Location: " . $redirect_target);
+                    exit();
+                } else {
+                    $error = "Contraseña incorrecta.";
+                }
             } else {
-                $error = "Contraseña incorrecta.";
+                $error = "El usuario no existe.";
             }
+            $stmt->close();
         } else {
-            $error = "El usuario no existe.";
+            $error = "Error al consultar la base de datos.";
         }
-        $stmt->close();
     } else {
         $error = "Por favor, llena todos los campos.";
     }
@@ -85,18 +92,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <header class="site-header">
   <div class="wrap nav">
-    <a href="index.html" class="brand">
+    <a href="index.php" class="brand">
       <span class="brand-mark"></span>
       <span class="brand-text">Tokow</span>
     </a>
     <nav class="nav-links">
-      <a href="index.html">Inicio</a>
+      <a href="index.php">Inicio</a>
       <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
       <a href="play.php">¡A Jugar!</a>
-      <?php if (isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1): ?>
-        <a href="admin.php" style="color: var(--mint);">Admin Dashboard</a>
-      <?php endif; ?>
     </nav>
     <div class="nav-cta">
       <a href="registro.php" class="btn btn-primary">Crear cuenta</a>
@@ -106,7 +110,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </header>
 
 <main class="auth-shell">
-  <!-- Lado izquierdo -->
   <div class="auth-side">
     <div class="auth-side-content">
       <span class="eyebrow">Bienvenido de vuelta</span>
@@ -119,7 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-  <!-- Lado derecho -->
   <div class="auth-form-wrap">
     <form class="auth-form" method="POST" action="">
       <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">

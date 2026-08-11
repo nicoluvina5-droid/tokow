@@ -9,7 +9,7 @@ $es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
 // Verificar si el usuario ya tiene suscripción activa
 $suscripcion_activa = null;
 if (isset($_SESSION['usuario_id'])) {
-    $suscripcion_activa = usuarioTieneSuscripcionActiva($conn, $_SESSION['usuario_id']);
+    $suscripcion_activa = usuarioTieneSuscripcionActiva($conn, (int)$_SESSION['usuario_id']);
 }
 ?>
 <!doctype html>
@@ -58,12 +58,12 @@ if (isset($_SESSION['usuario_id'])) {
 
   <header class="site-header">
     <div class="wrap nav">
-      <a href="index.html" class="brand">
+      <a href="index.php" class="brand">
         <span class="brand-mark"></span>
         <span class="brand-text">Tokow</span>
       </a>
       <nav class="nav-links">
-        <a href="index.html">Inicio</a>
+        <a href="index.php">Inicio</a>
         <a href="precios.php" class="active">Precios y servicios</a>
         <a href="nosotros.html">Acerca de</a>
         <a href="play.php">¡A Jugar!</a>
@@ -230,42 +230,20 @@ if (isset($_SESSION['usuario_id'])) {
         </table>
       </div>
     </section>
-
-    <!-- FAQ -->
-    <section>
-      <div class="wrap" style="max-width:800px;">
-        <div class="section-head">
-          <span class="eyebrow">Preguntas frecuentes</span>
-          <h2>Todo lo que necesitas saber.</h2>
-        </div>
-        <div class="faq-item">
-          <h4>¿Cómo funciona la pasarela de pago Tokow Pay?</h4>
-          <p>Tokow Pay es un sistema de simulación de compras. Al seleccionar un plan e ingresar datos ficticios, el sistema procesará la transacción, verificará la orden y otorgará de inmediato el acceso a tu cuenta.</p>
-        </div>
-        <div class="faq-item">
-          <h4>¿Necesito iniciar sesión para comprar?</h4>
-          <p>Sí, la compra de cualquier plan requiere iniciar sesión para asociar la suscripción activa a tu usuario registrado.</p>
-        </div>
-        <div class="faq-item">
-          <h4>¿Puedo cambiar de plan en cualquier momento?</h4>
-          <p>Sí, puedes alternar entre la Suscripción Normal y Premium cuando lo requieras desde la pasarela Tokow Pay.</p>
-        </div>
-      </div>
-    </section>
   </main>
 
   <footer>
     <div class="wrap">
       <div class="footer-grid">
         <div class="footer-brand">
-          <a href="index.html" class="brand"><span class="brand-mark"></span><span class="brand-text">Tokow</span></a>
+          <a href="index.php" class="brand"><span class="brand-mark"></span><span class="brand-text">Tokow</span></a>
           <p>Cloud gaming accesible para todos. Juega donde quieras, como quieras.</p>
         </div>
         <div class="footer-col">
           <h5>Producto</h5>
           <ul>
             <li><a href="precios.php">Precios y servicios</a></li>
-            <li><a href="index.html#como-funciona">Cómo funciona</a></li>
+            <li><a href="index.php#como-funciona">Cómo funciona</a></li>
           </ul>
         </div>
         <div class="footer-col">
