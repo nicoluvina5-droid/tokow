@@ -4,13 +4,27 @@ require_once 'db.php';
 
 $conn = getDBConnection();
 
-if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
+if (!isset($_SESSION['usuario'])) {
     header("Location: login.php?msg=login_required&redirect=mi-cuenta.php");
     exit();
 }
 
-$usuario_id = (int)$_SESSION['usuario_id'];
 $usuario_nombre = $_SESSION['usuario'];
+$usuario_id = isset($_SESSION['usuario_id']) ? (int)$_SESSION['usuario_id'] : 0;
+
+if ($usuario_id <= 0 && !empty($usuario_nombre)) {
+    $u_safe = addslashes($usuario_nombre);
+    $res_u = @$conn->query("SELECT id, es_admin FROM usuarios WHERE usuario = '$u_safe'");
+    if ($res_u && $res_u->num_rows > 0) {
+        $row_u = $res_u->fetch_assoc();
+        $usuario_id = (int)$row_u['id'];
+        $_SESSION['usuario_id'] = $usuario_id;
+        if (isset($row_u['es_admin'])) {
+            $_SESSION['es_admin'] = (int)$row_u['es_admin'];
+        }
+    }
+}
+
 $user_lower = strtolower($usuario_nombre);
 $es_admin = ($user_lower === 'admin' || $user_lower === 'leo' || (isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1));
 
@@ -332,17 +346,6 @@ if (!$suscripcion_info && $es_admin) {
       <div class="sub-detail-row">
         <span style="color: var(--muted);">Estado de Seguridad:</span>
         <span style="color: var(--mint);">Protegido con Sesión Encriptada</span>
-      </div>
-
-      <div style="background: rgba(124, 111, 247, 0.08); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 24px;">
-        <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 14px; color: var(--lavender);">🔑 Credenciales de Acceso Administrador:</h4>
-        <p style="font-size: 13px; color: var(--muted); margin: 0 0 8px 0;">
-          Para ingresar al <strong>Admin Dashboard</strong> y gestionar todos los usuarios o pagos, inicia sesión con:
-        </p>
-        <div style="font-family: monospace; font-size: 13px; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px;">
-          Usuario: <strong>admin</strong> | Contraseña: <strong>admin123</strong><br>
-          Usuario: <strong>leo</strong> | Contraseña: <strong>pan12</strong>
-        </div>
       </div>
     </div>
 

@@ -4,14 +4,25 @@ require_once 'db.php';
 
 $conn = getDBConnection();
 
-if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
+if (!isset($_SESSION['usuario'])) {
     $plan_requested = isset($_GET['plan']) ? $_GET['plan'] : 'normal_mensual';
     header("Location: login.php?msg=login_required&redirect=" . urlencode("checkout.php?plan=" . $plan_requested));
     exit();
 }
 
-$user_id = (int)$_SESSION['usuario_id'];
 $usuario = $_SESSION['usuario'];
+$user_id = isset($_SESSION['usuario_id']) ? (int)$_SESSION['usuario_id'] : 0;
+
+if ($user_id <= 0 && !empty($usuario)) {
+    $u_safe = addslashes($usuario);
+    $res_u = @$conn->query("SELECT id FROM usuarios WHERE usuario = '$u_safe'");
+    if ($res_u && $res_u->num_rows > 0) {
+        $row_u = $res_u->fetch_assoc();
+        $user_id = (int)$row_u['id'];
+        $_SESSION['usuario_id'] = $user_id;
+    }
+}
+
 $user_lower = strtolower($usuario);
 $es_admin = ($user_lower === 'admin' || $user_lower === 'leo' || (isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1));
 
