@@ -1,7 +1,6 @@
 <?php
 // Módulo de conexión a la base de datos Tokow con descubrimiento inteligente de Railway y soporte dual (MySQLi + PDO)
 
-// Wrappers de compatibilidad PDO -> MySQLi para entornos PHP donde mysqli no esté disponible
 if (!class_exists('TokowResult')) {
     class TokowResult {
         public $num_rows = 0;
@@ -115,7 +114,7 @@ if (!class_exists('TokowDBPDO')) {
 function getSystemEnvVars() {
     $vars = [];
 
-    // 1. Leer /proc/self/environ si existe en Linux / Docker / Railway
+    // 1. Leer /proc/self/environ si existe
     if (@file_exists('/proc/self/environ')) {
         $raw = @file_get_contents('/proc/self/environ');
         if ($raw) {
@@ -173,14 +172,13 @@ function getDBConnection() {
 
     $env = getSystemEnvVars();
 
-    // Intentar extraer host, usuario, clave, bd, puerto de URLs o variables individuales
     $hosts = [];
     $users = [];
     $passes = [];
     $dbs   = [];
     $ports = [];
 
-    // Revisar si existe una URL de conexión en Railway
+    // Parsear MYSQL_URL si existe
     $urls = ['MYSQL_URL', 'MYSQLURL', 'DATABASE_URL', 'RAILWAY_DATABASE_URL', 'RAILWAY_MYSQL_URL'];
     foreach ($urls as $u_key) {
         if (!empty($env[$u_key])) {
@@ -195,7 +193,6 @@ function getDBConnection() {
         }
     }
 
-    // Extraer de variables individuales de Railway
     if (!empty($env['MYSQLHOST'])) $hosts[] = $env['MYSQLHOST'];
     if (!empty($env['MYSQL_HOST'])) $hosts[] = $env['MYSQL_HOST'];
     if (!empty($env['RAILWAY_MYSQL_HOST'])) $hosts[] = $env['RAILWAY_MYSQL_HOST'];
@@ -213,12 +210,13 @@ function getDBConnection() {
     if (!empty($env['MYSQLPORT'])) $ports[] = (int)$env['MYSQLPORT'];
     if (!empty($env['MYSQL_PORT'])) $ports[] = (int)$env['MYSQL_PORT'];
 
-    // Valores por defecto de Railway suministrados por el usuario
+    // Credenciales confirmadas de Railway
     $hosts[] = 'mysql.railway.internal';
     $hosts[] = '127.0.0.1';
     $hosts[] = 'localhost';
 
     $users[] = 'root';
+
     $passes[] = 'vgELwtMeQfjleucGSRlgsUpGpoynJLvL';
     $passes[] = 'root';
     $passes[] = '';
@@ -228,7 +226,6 @@ function getDBConnection() {
 
     $ports[] = 3306;
 
-    // Limpiar duplicados manteniendo orden
     $hosts = array_values(array_unique(array_filter($hosts)));
     $users = array_values(array_unique(array_filter($users)));
     $passes = array_values(array_unique($passes));
@@ -238,7 +235,7 @@ function getDBConnection() {
     $conn = null;
     $last_error = '';
 
-    // Probar combinaciones con MySQLi si está disponible
+    // Probar combinaciones MySQLi
     if (class_exists('mysqli')) {
         foreach ($hosts as $h) {
             foreach ($ports as $prt) {
@@ -264,7 +261,7 @@ function getDBConnection() {
         }
     }
 
-    // Si MySQLi falló o no está instalado, probar con PDO (pdo_mysql)
+    // Probar combinaciones PDO
     if (!$conn && class_exists('PDO')) {
         foreach ($hosts as $h) {
             foreach ($ports as $prt) {
