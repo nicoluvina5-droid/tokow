@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $redirect_target = isset($_POST['redirect']) && !empty($_POST['redirect']) ? $_POST['redirect'] : 'precios.php';
 
     if (!empty($usuario) && !empty($contrasena)) {
-        $stmt = @$conn->prepare("SELECT id, usuario, contraseña FROM usuarios WHERE usuario = ?");
+        $stmt = @$conn->prepare("SELECT id, usuario, contraseña, es_admin FROM usuarios WHERE usuario = ?");
         if ($stmt) {
             $stmt->bind_param("s", $usuario);
             $stmt->execute();
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['usuario_id'] = (int)$row['id'];
                     $_SESSION['usuario'] = $row['usuario'];
 
-                    $is_admin = (strtolower($row['usuario']) === 'admin' || strtolower($row['usuario']) === 'leo');
+                    $is_admin = (strtolower($row['usuario']) === 'admin' || strtolower($row['usuario']) === 'leo' || (isset($row['es_admin']) && (int)$row['es_admin'] === 1));
                     $_SESSION['es_admin'] = $is_admin ? 1 : 0;
 
                     header("Location: " . $redirect_target);
@@ -127,6 +127,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <?php if (isset($_GET['msg']) && $_GET['msg'] === 'login_required'): ?>
         <div class="auth-notice">Debes iniciar sesión para comprar una suscripción o acceder a los servicios.</div>
+      <?php endif; ?>
+
+      <?php if (isset($_GET['msg']) && $_GET['msg'] === 'account_deleted'): ?>
+        <div class="auth-notice" style="border-color: rgba(77, 200, 163, 0.4); color: var(--mint);">Tu cuenta ha sido eliminada con éxito. Esperamos verte de nuevo pronto.</div>
       <?php endif; ?>
 
       <?php if (!empty($error)): ?>

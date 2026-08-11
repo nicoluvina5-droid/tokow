@@ -14,6 +14,33 @@ $usuario_nombre = $_SESSION['usuario'];
 $user_lower = strtolower($usuario_nombre);
 $es_admin = ($user_lower === 'admin' || $user_lower === 'leo' || (isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1));
 
+// Procesar eliminación de cuenta enviada por el propio usuario cliente
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_account']) && $_POST['action_account'] === 'delete_my_account') {
+    @$conn->query("DELETE FROM suscripciones WHERE id_usuario = $usuario_id");
+    $stmt_del = @$conn->prepare("DELETE FROM usuarios WHERE id = ?");
+    if ($stmt_del) {
+        $stmt_del->bind_param("i", $usuario_id);
+        $stmt_del->execute();
+        $stmt_del->close();
+    } else {
+        @$conn->query("DELETE FROM usuarios WHERE id = $usuario_id");
+    }
+
+    // Destruir sesión y limpiar cookies
+    $_SESSION = array();
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
+    session_destroy();
+
+    header("Location: login.php?msg=account_deleted");
+    exit();
+}
+
 // Obtener detalles de la suscripción actual del usuario
 $suscripcion_info = null;
 
@@ -274,9 +301,51 @@ if (!$suscripcion_info && $es_admin) {
         </div>
       </div>
     </div>
+
+    <!-- TARJETA 3: ZONA DE PELIGRO - ELIMINAR CUENTA -->
+    <div class="info-card" style="border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.04); grid-column: 1 / -1; margin-top: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <h3 style="margin: 0 0 6px 0; color: #fca5a5;">⚠️ Eliminar Cuenta</h3>
+          <p style="margin: 0; color: var(--muted); font-size: 13px;">
+            Al eliminar tu cuenta, se borrarán de inmediato tus credenciales y suscripciones de la plataforma. Esta acción finalizará tu sesión automáticamente y no se puede revertir.
+          </p>
+        </div>
+        <button type="button" onclick="openDeleteAccountModal()" class="btn" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer;">
+          🗑️ Eliminar mi cuenta
+        </button>
+      </div>
+    </div>
   </div>
 
 </main>
+
+<!-- MODAL CONFIRMAR ELIMINACIÓN DE CUENTA -->
+<div id="modalDeleteAccount" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(8, 9, 18, 0.85); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 10000; padding: 20px;">
+  <div style="background: #131428; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 20px; padding: 32px; width: 100%; max-width: 460px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); position: relative;">
+    <button type="button" onclick="closeDeleteAccountModal()" style="position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: var(--muted); font-size: 20px; cursor: pointer;">✕</button>
+    <h3 style="margin-top: 0; color: #ef4444; font-size: 20px;">⚠️ ¿Eliminar tu cuenta Tokow?</h3>
+    <p style="color: var(--muted); font-size: 14px; margin-bottom: 24px; line-height: 1.5;">
+      ¿Estás seguro de que deseas eliminar permanentemente la cuenta <strong style="color: white;">@<?php echo htmlspecialchars($usuario_nombre); ?></strong>? Se cerrará tu sesión de inmediato y se borrará tu acceso.
+    </p>
+    <form method="POST" action="">
+      <input type="hidden" name="action_account" value="delete_my_account">
+      <div style="display: flex; gap: 12px;">
+        <button type="button" onclick="closeDeleteAccountModal()" class="btn btn-ghost" style="flex: 1;">Cancelar</button>
+        <button type="submit" class="btn" style="background: #ef4444; color: white; border: none; flex: 1; font-weight: 600; cursor: pointer;">Sí, eliminar cuenta</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openDeleteAccountModal() {
+  document.getElementById('modalDeleteAccount').style.display = 'flex';
+}
+function closeDeleteAccountModal() {
+  document.getElementById('modalDeleteAccount').style.display = 'none';
+}
+</script>
 
 <footer>
   <div class="wrap">

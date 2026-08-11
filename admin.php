@@ -18,11 +18,97 @@ if (!$es_admin) {
 }
 
 $msg_admin = '';
+$error_admin = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_admin'])) {
-    $target_user_id = (int)$_POST['target_user_id'];
     $action = $_POST['action_admin'];
+    $target_user_id = (int)($_POST['target_user_id'] ?? 0);
 
-    if ($action === 'grant_premium' && $target_user_id) {
+    if ($action === 'create_user') {
+        $username = trim($_POST['usuario'] ?? '');
+        $password = trim($_POST['contrasena'] ?? '');
+        $es_adm = isset($_POST['es_admin']) ? (int)$_POST['es_admin'] : 0;
+
+        if (!empty($username) && !empty($password)) {
+            $stmt_check = @$conn->prepare("SELECT id FROM usuarios WHERE usuario = ?");
+            if ($stmt_check) {
+                $stmt_check->bind_param("s", $username);
+                $stmt_check->execute();
+                $res_chk = $stmt_check->get_result();
+                if ($res_chk && $res_chk->num_rows > 0) {
+                    $error_admin = "El nombre de usuario '@" . htmlspecialchars($username) . "' ya está registrado.";
+                } else {
+                    $hash_pass = password_hash($password, PASSWORD_BCRYPT);
+                    $stmt_ins = @$conn->prepare("INSERT INTO usuarios (usuario, contraseña, es_admin) VALUES (?, ?, ?)");
+                    if ($stmt_ins) {
+                        $stmt_ins->bind_param("ssi", $username, $hash_pass, $es_adm);
+                        if ($stmt_ins->execute()) {
+                            $msg_admin = "Usuario '@" . htmlspecialchars($username) . "' creado exitosamente como " . ($es_adm ? "Administrador" : "Cliente") . ".";
+                        } else {
+                            $error_admin = "Error al registrar el usuario en la base de datos.";
+                        }
+                        $stmt_ins->close();
+                    } else {
+                        $error_admin = "Error preparando la consulta de inserción.";
+                    }
+                }
+                $stmt_check->close();
+            }
+        } else {
+            $error_admin = "Por favor completa todos los campos requeridos para crear el usuario.";
+        }
+    } elseif ($action === 'edit_user') {
+        $edit_id = (int)($_POST['edit_user_id'] ?? 0);
+        $username = trim($_POST['usuario'] ?? '');
+        $password = trim($_POST['contrasena'] ?? '');
+        $es_adm = isset($_POST['es_admin']) ? (int)$_POST['es_admin'] : 0;
+
+        if ($edit_id > 0 && !empty($username)) {
+            $stmt_check = @$conn->prepare("SELECT id FROM usuarios WHERE usuario = ? AND id != ?");
+            $is_dup = false;
+            if ($stmt_check) {
+                $stmt_check->bind_param("si", $username, $edit_id);
+                $stmt_check->execute();
+                $res_chk = $stmt_check->get_result();
+                if ($res_chk && $res_chk->num_rows > 0) {
+                    $is_dup = true;
+                    $error_admin = "El nombre de usuario '@" . htmlspecialchars($username) . "' ya pertenece a otra cuenta.";
+                }
+                $stmt_check->close();
+            }
+
+            if (!$is_dup) {
+                if (!empty($password)) {
+                    $hash_pass = password_hash($password, PASSWORD_BCRYPT);
+                    $stmt_upd = @$conn->prepare("UPDATE usuarios SET usuario = ?, contraseña = ?, es_admin = ? WHERE id = ?");
+                    if ($stmt_upd) {
+                        $stmt_upd->bind_param("ssii", $username, $hash_pass, $es_adm, $edit_id);
+                        $stmt_upd->execute();
+                        $stmt_upd->close();
+                    }
+                } else {
+                    $stmt_upd = @$conn->prepare("UPDATE usuarios SET usuario = ?, es_admin = ? WHERE id = ?");
+                    if ($stmt_upd) {
+                        $stmt_upd->bind_param("sii", $username, $es_adm, $edit_id);
+                        $stmt_upd->execute();
+                        $stmt_upd->close();
+                    }
+                }
+
+                if ($edit_id === $usuario_id) {
+                    $_SESSION['usuario'] = $username;
+                    $_SESSION['es_admin'] = $es_adm;
+                }
+
+                $msg_admin = "Usuario ID #$edit_id (" . htmlspecialchars($username) . ") actualizado con éxito.";
+            }
+        } else {
+            $error_admin = "El ID de usuario y nombre son obligatorios.";
+        }
+    } elseif ($action === 'delete_user' && $target_user_id) {
+        @$conn->query("DELETE FROM suscripciones WHERE id_usuario = $target_user_id");
+        @$conn->query("DELETE FROM usuarios WHERE id = $target_user_id");
+        $msg_admin = "Usuario ID #$target_user_id eliminado correctamente.";
+    } elseif ($action === 'grant_premium' && $target_user_id) {
         $id_plan = 2;
         @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");
         $fin = date('Y-m-d', strtotime('+1 month'));
@@ -59,7 +145,7 @@ $res_ultimos_pagos = @$conn->query("SELECT p.*, s.id_usuario, u.usuario, pl.nomb
     JOIN planes pl ON s.id_plan = pl.id_plan 
     ORDER BY p.id_pago DESC LIMIT 10");
 
-$res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_estado, pl.nombre as plan_nombre, s.fecha_fin 
+$res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, u.es_admin, s.estado as sub_estado, pl.nombre as plan_nombre, s.fecha_fin 
     FROM usuarios u 
     LEFT JOIN suscripciones s ON u.id = s.id_usuario AND s.estado = 'Activa' 
     LEFT JOIN planes pl ON s.id_plan = pl.id_plan 
@@ -168,6 +254,67 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
     cursor: pointer;
     margin-right: 4px;
   }
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(8, 9, 18, 0.85);
+    backdrop-filter: blur(8px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    padding: 20px;
+  }
+  .modal-overlay.active {
+    display: flex;
+  }
+  .modal-card {
+    background: #131428;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+    position: relative;
+  }
+  .modal-card h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+  }
+  .modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+  }
+  .form-group {
+    margin-bottom: 18px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  .form-group input:focus, .form-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
 </style>
 </head>
 <body>
@@ -195,7 +342,13 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
 
   <?php if (!empty($msg_admin)): ?>
     <div style="background: rgba(77, 200, 163, 0.15); border: 1px solid var(--mint); color: var(--mint); padding: 12px 20px; border-radius: 12px; margin-bottom: 24px;">
-      ✓ <?php echo htmlspecialchars($msg_admin); ?>
+      ✓ <?php echo $msg_admin; ?>
+    </div>
+  <?php endif; ?>
+
+  <?php if (!empty($error_admin)): ?>
+    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #ef4444; padding: 12px 20px; border-radius: 12px; margin-bottom: 24px;">
+      ⚠️ <?php echo $error_admin; ?>
     </div>
   <?php endif; ?>
 
@@ -226,8 +379,15 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
   </div>
 
   <div class="admin-section">
-    <h3 style="margin-bottom: 8px;">Gestión de Usuarios y Estado de Suscripción</h3>
-    <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">Permite verificar el plan activo de cada usuario u otorgar/revocar accesos directos para pruebas.</p>
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 16px;">
+      <div>
+        <h3 style="margin: 0 0 4px 0;">Gestión de Usuarios y Estado de Suscripción</h3>
+        <p style="color: var(--muted); font-size: 13px; margin: 0;">Crea nuevos administradores o clientes, edita cuentas existentes u otorga/revocar accesos.</p>
+      </div>
+      <button type="button" onclick="openAddModal()" class="btn btn-primary" style="padding: 10px 20px; font-size: 13px;">
+        ➕ Añadir Nuevo Usuario
+      </button>
+    </div>
 
     <div style="overflow-x: auto;">
       <table class="data-table">
@@ -245,14 +405,15 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
         <tbody>
           <?php if ($res_lista_usuarios && $res_lista_usuarios->num_rows > 0): ?>
             <?php while ($usr = $res_lista_usuarios->fetch_assoc()): ?>
+              <?php $usr_is_admin = (int)($usr['es_admin'] ?? 0) === 1 || strtolower($usr['usuario']) === 'admin' || strtolower($usr['usuario']) === 'leo'; ?>
               <tr>
                 <td>#<?php echo $usr['id']; ?></td>
                 <td><strong>@<?php echo htmlspecialchars($usr['usuario']); ?></strong></td>
                 <td>
-                  <?php if (strtolower($usr['usuario']) === 'admin' || strtolower($usr['usuario']) === 'leo'): ?>
+                  <?php if ($usr_is_admin): ?>
                     <span class="badge-admin">ADMIN</span>
                   <?php else: ?>
-                    <span style="color: var(--muted);">Usuario</span>
+                    <span style="background: rgba(255,255,255,0.08); color: var(--muted); padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700;">CLIENTE</span>
                   <?php endif; ?>
                 </td>
                 <td>
@@ -265,14 +426,21 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
                 <td><?php echo $usr['plan_nombre'] ? htmlspecialchars($usr['plan_nombre']) : '—'; ?></td>
                 <td><?php echo $usr['fecha_fin'] ? htmlspecialchars($usr['fecha_fin']) : '—'; ?></td>
                 <td>
-                  <form method="POST" action="" style="display:inline-block;">
-                    <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
-                    <button type="submit" name="action_admin" value="grant_normal" class="action-btn-sm" style="background: rgba(124, 111, 247, 0.2); color: #B4AEFF;">+ Normal ($10)</button>
-                    <button type="submit" name="action_admin" value="grant_premium" class="action-btn-sm" style="background: rgba(77, 200, 163, 0.2); color: #4DC8A3;">+ Premium ($20)</button>
-                    <?php if ($usr['sub_estado'] === 'Activa'): ?>
-                      <button type="submit" name="action_admin" value="revoke" class="action-btn-sm" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5;">Revocar</button>
-                    <?php endif; ?>
-                  </form>
+                  <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" onclick="openEditModal(<?php echo $usr['id']; ?>, '<?php echo htmlspecialchars($usr['usuario'], ENT_QUOTES); ?>', <?php echo $usr_is_admin ? 1 : 0; ?>)" class="action-btn-sm" style="background: rgba(124, 111, 247, 0.25); color: #B4AEFF;">✏️ Editar</button>
+                    <form method="POST" action="" style="display:inline-block;" onsubmit="return confirm('¿Seguro que deseas eliminar a @<?php echo htmlspecialchars($usr['usuario'], ENT_QUOTES); ?>?');">
+                      <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
+                      <button type="submit" name="action_admin" value="delete_user" class="action-btn-sm" style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;">🗑️</button>
+                    </form>
+                    <form method="POST" action="" style="display:inline-block;">
+                      <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
+                      <button type="submit" name="action_admin" value="grant_normal" class="action-btn-sm" style="background: rgba(124, 111, 247, 0.2); color: #B4AEFF;">+ Normal ($10)</button>
+                      <button type="submit" name="action_admin" value="grant_premium" class="action-btn-sm" style="background: rgba(77, 200, 163, 0.2); color: #4DC8A3;">+ Premium ($20)</button>
+                      <?php if ($usr['sub_estado'] === 'Activa'): ?>
+                        <button type="submit" name="action_admin" value="revoke" class="action-btn-sm" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5;">Revocar</button>
+                      <?php endif; ?>
+                    </form>
+                  </div>
                 </td>
               </tr>
             <?php endwhile; ?>
@@ -322,6 +490,88 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
     </div>
   </div>
 </main>
+
+<!-- MODAL AÑADIR USUARIO -->
+<div id="modalAddUser" class="modal-overlay">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeAddModal()">✕</button>
+    <h3>➕ Crear Nuevo Usuario</h3>
+    <p style="color: var(--muted); font-size: 13px; margin-bottom: 20px;">Añade un nuevo usuario cliente o administrador al sistema.</p>
+    <form method="POST" action="">
+      <input type="hidden" name="action_admin" value="create_user">
+      <div class="form-group">
+        <label for="add_user">Nombre de usuario</label>
+        <input type="text" id="add_user" name="usuario" placeholder="Ej. juan_perez" required>
+      </div>
+      <div class="form-group">
+        <label for="add_pass">Contraseña</label>
+        <input type="password" id="add_pass" name="contrasena" placeholder="••••••••" required>
+      </div>
+      <div class="form-group">
+        <label for="add_role">Rol en la plataforma</label>
+        <select id="add_role" name="es_admin">
+          <option value="0">Cliente (Usuario Estándar)</option>
+          <option value="1">Administrador (Acceso Total)</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 24px;">
+        <button type="button" onclick="closeAddModal()" class="btn btn-ghost" style="flex: 1;">Cancelar</button>
+        <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Usuario</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL EDITAR USUARIO -->
+<div id="modalEditUser" class="modal-overlay">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeEditModal()">✕</button>
+    <h3>✏️ Editar Usuario</h3>
+    <p style="color: var(--muted); font-size: 13px; margin-bottom: 20px;">Modifica los detalles del usuario o actualiza su rol / contraseña.</p>
+    <form method="POST" action="">
+      <input type="hidden" name="action_admin" value="edit_user">
+      <input type="hidden" id="edit_user_id" name="edit_user_id" value="">
+      <div class="form-group">
+        <label for="edit_user">Nombre de usuario</label>
+        <input type="text" id="edit_user" name="usuario" required>
+      </div>
+      <div class="form-group">
+        <label for="edit_pass">Nueva Contraseña <span style="font-size: 11px; color: var(--muted);">(dejar en blanco para mantener la actual)</span></label>
+        <input type="password" id="edit_pass" name="contrasena" placeholder="Opcional">
+      </div>
+      <div class="form-group">
+        <label for="edit_role">Rol en la plataforma</label>
+        <select id="edit_role" name="es_admin">
+          <option value="0">Cliente (Usuario Estándar)</option>
+          <option value="1">Administrador (Acceso Total)</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 24px;">
+        <button type="button" onclick="closeEditModal()" class="btn btn-ghost" style="flex: 1;">Cancelar</button>
+        <button type="submit" class="btn btn-primary" style="flex: 1;">Guardar Cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openAddModal() {
+  document.getElementById('modalAddUser').classList.add('active');
+}
+function closeAddModal() {
+  document.getElementById('modalAddUser').classList.remove('active');
+}
+function openEditModal(id, usuario, esAdmin) {
+  document.getElementById('edit_user_id').value = id;
+  document.getElementById('edit_user').value = usuario;
+  document.getElementById('edit_pass').value = '';
+  document.getElementById('edit_role').value = esAdmin ? "1" : "0";
+  document.getElementById('modalEditUser').classList.add('active');
+}
+function closeEditModal() {
+  document.getElementById('modalEditUser').classList.remove('active');
+}
+</script>
 
 <footer>
   <div class="wrap">

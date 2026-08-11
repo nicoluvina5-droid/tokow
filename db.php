@@ -233,12 +233,34 @@ if (!class_exists('TokowJSONDB')) {
                     $rows[] = [
                         'id' => $u['id'],
                         'usuario' => $u['usuario'],
+                        'es_admin' => isset($u['es_admin']) ? (int)$u['es_admin'] : 0,
                         'sub_estado' => $sub ? $sub['estado'] : 'Inactiva',
                         'plan_nombre' => $plan ? $plan['nombre'] : '—',
                         'fecha_fin' => $sub ? $sub['fecha_fin'] : '—'
                     ];
                 }
                 return new TokowResultArray($rows);
+            }
+
+            if (preg_match('/DELETE\s+FROM\s+`?usuarios`?\s+WHERE\s+id\s*=\s*(\d+)/i', $sql, $matches)) {
+                $uid = (int)$matches[1];
+                $data['usuarios'] = array_values(array_filter($data['usuarios'], function($u) use ($uid) {
+                    return (int)$u['id'] !== $uid;
+                }));
+                $data['suscripciones'] = array_values(array_filter($data['suscripciones'], function($s) use ($uid) {
+                    return (int)$s['id_usuario'] !== $uid;
+                }));
+                $this->saveData($data);
+                return true;
+            }
+
+            if (preg_match('/DELETE\s+FROM\s+`?suscripciones`?\s+WHERE\s+id_usuario\s*=\s*(\d+)/i', $sql, $matches)) {
+                $uid = (int)$matches[1];
+                $data['suscripciones'] = array_values(array_filter($data['suscripciones'], function($s) use ($uid) {
+                    return (int)$s['id_usuario'] !== $uid;
+                }));
+                $this->saveData($data);
+                return true;
             }
 
             return new TokowResultArray([]);
@@ -280,14 +302,66 @@ if (!class_exists('TokowJSONStmt')) {
                     if ($u['id'] > $max_id) $max_id = $u['id'];
                 }
                 $new_id = $max_id + 1;
+                $es_adm = isset($this->params[2]) ? (int)$this->params[2] : ((isset($this->params[0]) && (strtolower($this->params[0]) === 'admin' || strtolower($this->params[0]) === 'leo')) ? 1 : 0);
                 $new_user = [
                     'id' => $new_id,
                     'usuario' => isset($this->params[0]) ? $this->params[0] : '',
                     'contraseña' => isset($this->params[1]) ? $this->params[1] : '',
-                    'es_admin' => (isset($this->params[0]) && (strtolower($this->params[0]) === 'admin' || strtolower($this->params[0]) === 'leo')) ? 1 : 0
+                    'es_admin' => $es_adm
                 ];
                 $data['usuarios'][] = $new_user;
                 $this->db->insert_id = $new_id;
+                @file_put_contents($filePath, json_encode($data, JSON_PRETTY_PRINT));
+                return true;
+            }
+
+            if (preg_match('/UPDATE\s+`?usuarios`?\s+SET/i', $this->sql)) {
+                if (preg_match('/contraseña\s*=\s*\?/i', $this->sql)) {
+                    // SET usuario = ?, contraseña = ?, es_admin = ? WHERE id = ?
+                    $user_val = isset($this->params[0]) ? $this->params[0] : '';
+                    $pass_val = isset($this->params[1]) ? $this->params[1] : '';
+                    $adm_val  = isset($this->params[2]) ? (int)$this->params[2] : 0;
+                    $target_id = isset($this->params[3]) ? (int)$this->params[3] : 0;
+                    foreach ($data['usuarios'] as &$u) {
+                        if ((int)$u['id'] === $target_id) {
+                            $u['usuario'] = $user_val;
+                            if (!empty($pass_val)) $u['contraseña'] = $pass_val;
+                            $u['es_admin'] = $adm_val;
+                        }
+                    }
+                } else {
+                    // SET usuario = ?, es_admin = ? WHERE id = ?
+                    $user_val = isset($this->params[0]) ? $this->params[0] : '';
+                    $adm_val  = isset($this->params[1]) ? (int)$this->params[1] : 0;
+                    $target_id = isset($this->params[2]) ? (int)$this->params[2] : 0;
+                    foreach ($data['usuarios'] as &$u) {
+                        if ((int)$u['id'] === $target_id) {
+                            $u['usuario'] = $user_val;
+                            $u['es_admin'] = $adm_val;
+                        }
+                    }
+                }
+                @file_put_contents($filePath, json_encode($data, JSON_PRETTY_PRINT));
+                return true;
+            }
+
+            if (preg_match('/DELETE\s+FROM\s+`?usuarios`?\s+WHERE\s+id\s*=\s*\?/i', $this->sql)) {
+                $target_id = isset($this->params[0]) ? (int)$this->params[0] : 0;
+                $data['usuarios'] = array_values(array_filter($data['usuarios'], function($u) use ($target_id) {
+                    return (int)$u['id'] !== $target_id;
+                }));
+                $data['suscripciones'] = array_values(array_filter($data['suscripciones'], function($s) use ($target_id) {
+                    return (int)$s['id_usuario'] !== $target_id;
+                }));
+                @file_put_contents($filePath, json_encode($data, JSON_PRETTY_PRINT));
+                return true;
+            }
+
+            if (preg_match('/DELETE\s+FROM\s+`?suscripciones`?\s+WHERE\s+id_usuario\s*=\s*\?/i', $this->sql)) {
+                $target_id = isset($this->params[0]) ? (int)$this->params[0] : 0;
+                $data['suscripciones'] = array_values(array_filter($data['suscripciones'], function($s) use ($target_id) {
+                    return (int)$s['id_usuario'] !== $target_id;
+                }));
                 @file_put_contents($filePath, json_encode($data, JSON_PRETTY_PRINT));
                 return true;
             }
