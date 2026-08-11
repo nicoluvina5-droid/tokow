@@ -59,6 +59,15 @@ $es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
     <section class="hero">
       <div class="wrap hero-grid">
         <div>
+          <div class="social-hero-bar">
+            <span class="social-title">🌐 Redes Oficiales:</span>
+            <a href="https://www.instagram.com/tokow.oficial/" target="_blank" class="social-pill-btn insta">
+              <span>◎</span> Instagram
+            </a>
+            <a href="https://www.facebook.com/profile.php?id=61592803082599" target="_blank" class="social-pill-btn fb">
+              <span>󰈌</span> Facebook
+            </a>
+          </div>
           <span class="eyebrow">Cloud Gaming en vivo</span>
           <h1>Tu próximo nivel <em>no requiere</em> una PC gamer.</h1>
           <p class="lede">Tokow transmite videojuegos de alto rendimiento directo a tu pantalla — celular, laptop o TV —
