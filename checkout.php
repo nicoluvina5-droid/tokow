@@ -4,7 +4,6 @@ require_once 'db.php';
 
 $conn = getDBConnection();
 
-// Verificar inicio de sesión obligatorio
 if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
     $plan_requested = isset($_GET['plan']) ? $_GET['plan'] : 'normal_mensual';
     header("Location: login.php?msg=login_required&redirect=" . urlencode("checkout.php?plan=" . $plan_requested));
@@ -13,6 +12,8 @@ if (!isset($_SESSION['usuario']) || !isset($_SESSION['usuario_id'])) {
 
 $user_id = (int)$_SESSION['usuario_id'];
 $usuario = $_SESSION['usuario'];
+$user_lower = strtolower($usuario);
+$es_admin = ($user_lower === 'admin' || $user_lower === 'leo' || (isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1));
 
 $plan_type = isset($_GET['plan']) ? trim($_GET['plan']) : 'normal_mensual';
 
@@ -251,9 +252,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
       <a href="index.php">Inicio</a>
       <a href="precios.php">Precios y servicios</a>
       <a href="nosotros.html">Acerca de</a>
+      <a href="mi-cuenta.php">Mi Cuenta</a>
+      <?php if ($es_admin): ?>
+        <a href="admin.php" style="color: var(--mint);">Admin Dashboard</a>
+      <?php endif; ?>
     </nav>
     <div class="nav-cta">
-      <span style="font-size: 14px; color: var(--lavender);">🎮 @<?php echo htmlspecialchars($usuario); ?></span>
+      <a href="mi-cuenta.php" style="font-size: 14px; color: var(--lavender); text-decoration: none;">🎮 @<?php echo htmlspecialchars($usuario); ?></a>
     </div>
   </div>
 </header>
@@ -285,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['procesar_pago'])) {
         </div>
       </div>
 
-      <a href="precios.php" class="btn btn-primary btn-block btn-lg" style="font-size: 16px;">Ver Estado de Suscripción</a>
+      <a href="mi-cuenta.php" class="btn btn-primary btn-block btn-lg" style="font-size: 16px;">Ver Detalles en Mi Cuenta 👤</a>
     </div>
   <?php else: ?>
     <div style="text-align: center; margin-top: 24px;">

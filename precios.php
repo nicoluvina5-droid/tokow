@@ -65,13 +65,16 @@ if (isset($_SESSION['usuario_id'])) {
         <a href="index.php">Inicio</a>
         <a href="precios.php" class="active">Precios y servicios</a>
         <a href="nosotros.html">Acerca de</a>
+        <?php if ($usuario_logueado): ?>
+          <a href="mi-cuenta.php">Mi Cuenta</a>
+        <?php endif; ?>
         <?php if ($es_admin): ?>
           <a href="admin.php" style="color: var(--mint);">Admin Dashboard</a>
         <?php endif; ?>
       </nav>
       <div class="nav-cta">
         <?php if ($usuario_logueado): ?>
-          <span style="font-size: 14px; color: var(--lavender); margin-right: 12px;">🎮 @<?php echo htmlspecialchars($usuario_logueado); ?></span>
+          <a href="mi-cuenta.php" style="font-size: 14px; color: var(--lavender); margin-right: 12px; text-decoration: none;">🎮 @<?php echo htmlspecialchars($usuario_logueado); ?></a>
           <a href="logout.php" class="btn btn-ghost">Cerrar sesión</a>
         <?php else: ?>
           <a href="login.php" class="btn btn-ghost">Iniciar sesión</a>
@@ -98,7 +101,7 @@ if (isset($_SESSION['usuario_id'])) {
             <div>
               <strong>Suscripción Actual:</strong> <span style="color: var(--mint);"><?php echo htmlspecialchars($suscripcion_activa['plan_nombre']); ?></span> (Activa hasta: <?php echo htmlspecialchars($suscripcion_activa['fecha_fin']); ?>)
             </div>
-            <span class="btn btn-primary" style="padding: 8px 16px; font-size: 13px; cursor: default;">Activa ✓</span>
+            <a href="mi-cuenta.php" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Ver Mi Cuenta 👤</a>
           </div>
         <?php endif; ?>
 
@@ -251,6 +254,7 @@ if (isset($_SESSION['usuario_id'])) {
           <ul>
             <li><a href="login.php">Iniciar sesión</a></li>
             <li><a href="registro.php">Crear cuenta</a></li>
+            <li><a href="mi-cuenta.php">Mi Cuenta</a></li>
           </ul>
         </div>
       </div>

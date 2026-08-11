@@ -34,13 +34,16 @@ $es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
         <a href="index.php#como-funciona">Cómo funciona</a>
         <a href="precios.php">Precios y servicios</a>
         <a href="nosotros.html">Acerca de</a>
+        <?php if ($usuario_logueado): ?>
+          <a href="mi-cuenta.php">Mi Cuenta</a>
+        <?php endif; ?>
         <?php if ($es_admin): ?>
           <a href="admin.php" style="color: var(--mint);">Admin Dashboard</a>
         <?php endif; ?>
       </nav>
       <div class="nav-cta">
         <?php if ($usuario_logueado): ?>
-          <span style="font-size: 14px; color: var(--lavender); margin-right: 12px;">🎮 @<?php echo htmlspecialchars($usuario_logueado); ?></span>
+          <a href="mi-cuenta.php" style="font-size: 14px; color: var(--lavender); margin-right: 12px; text-decoration: none;">🎮 @<?php echo htmlspecialchars($usuario_logueado); ?></a>
           <a href="logout.php" class="btn btn-ghost">Cerrar sesión</a>
         <?php else: ?>
           <a href="login.php" class="btn btn-ghost">Iniciar sesión</a>
@@ -235,7 +238,6 @@ $es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
           <ul>
             <li><a href="precios.php">Precios y servicios</a></li>
             <li><a href="index.php#como-funciona">Cómo funciona</a></li>
-            <li><a href="precios.php">Catálogo de juegos</a></li>
           </ul>
         </div>
         <div class="footer-col">
@@ -249,6 +251,7 @@ $es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
           <ul>
             <li><a href="login.php">Iniciar sesión</a></li>
             <li><a href="registro.php">Crear cuenta</a></li>
+            <li><a href="mi-cuenta.php">Mi Cuenta</a></li>
           </ul>
         </div>
       </div>

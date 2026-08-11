@@ -181,6 +181,7 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, s.estado as sub_est
     <span class="badge-admin">DASHBOARD DE PLATAFORMA</span>
   </div>
   <div style="display:flex; align-items:center; gap:16px;">
+    <a href="mi-cuenta.php" class="btn btn-ghost" style="padding: 8px 16px; font-size: 13px;">👤 Mi Cuenta</a>
     <a href="precios.php" class="btn btn-ghost" style="padding: 8px 16px; font-size: 13px;">Ver Precios</a>
     <a href="logout.php" style="color: #ef4444; text-decoration: none; font-size: 13px;">Cerrar Sesión</a>
   </div>
