@@ -1,109 +1,300 @@
 <?php
-// Módulo de conexión ultra-seguro y compatible a la base de datos Tokow para Railway y local
+// Módulo de conexión a la base de datos Tokow con descubrimiento inteligente de Railway y soporte dual (MySQLi + PDO)
 
-function getEnvVar($key, $default = '') {
-    $val = getenv($key);
-    if ($val !== false && $val !== '') return $val;
-    if (isset($_ENV[$key]) && $_ENV[$key] !== '') return $_ENV[$key];
-    if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') return $_SERVER[$key];
-    return $default;
+// Wrappers de compatibilidad PDO -> MySQLi para entornos PHP donde mysqli no esté disponible
+if (!class_exists('TokowResult')) {
+    class TokowResult {
+        public $num_rows = 0;
+        private $rows = [];
+        private $cursor = 0;
+
+        public function __construct($stmt) {
+            if ($stmt instanceof PDOStatement) {
+                try {
+                    $this->rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $this->num_rows = count($this->rows);
+                } catch (Throwable $e) {
+                    $this->rows = [];
+                    $this->num_rows = 0;
+                }
+            }
+        }
+
+        public function fetch_assoc() {
+            if ($this->cursor < count($this->rows)) {
+                return $this->rows[$this->cursor++];
+            }
+            return null;
+        }
+    }
+}
+
+if (!class_exists('TokowStmt')) {
+    class TokowStmt {
+        private $stmt;
+        private $db;
+        private $params = [];
+
+        public function __construct($stmt, $db) {
+            $this->stmt = $stmt;
+            $this->db = $db;
+        }
+
+        public function bind_param($types, ...$args) {
+            $this->params = $args;
+            return true;
+        }
+
+        public function execute() {
+            try {
+                $res = $this->stmt->execute($this->params);
+                if (method_exists($this->db, 'setInsertId')) {
+                    $this->db->setInsertId();
+                }
+                return $res;
+            } catch (Throwable $e) {
+                return false;
+            }
+        }
+
+        public function get_result() {
+            return new TokowResult($this->stmt);
+        }
+
+        public function close() {
+            $this->stmt = null;
+        }
+    }
+}
+
+if (!class_exists('TokowDBPDO')) {
+    class TokowDBPDO {
+        private $pdo;
+        public $connect_error = null;
+        public $insert_id = 0;
+
+        public function __construct($pdo) {
+            $this->pdo = $pdo;
+        }
+
+        public function set_charset($charset) {
+            try {
+                $this->pdo->exec("SET NAMES $charset");
+            } catch (Throwable $e) {}
+        }
+
+        public function setInsertId() {
+            try {
+                $this->insert_id = (int)$this->pdo->lastInsertId();
+            } catch (Throwable $e) {}
+        }
+
+        public function query($sql) {
+            try {
+                $stmt = $this->pdo->query($sql);
+                if ($stmt === false) return false;
+                $this->setInsertId();
+                return new TokowResult($stmt);
+            } catch (Throwable $e) {
+                return false;
+            }
+        }
+
+        public function prepare($sql) {
+            try {
+                $stmt = $this->pdo->prepare($sql);
+                if (!$stmt) return false;
+                return new TokowStmt($stmt, $this);
+            } catch (Throwable $e) {
+                return false;
+            }
+        }
+    }
+}
+
+function getSystemEnvVars() {
+    $vars = [];
+
+    // 1. Leer /proc/self/environ si existe en Linux / Docker / Railway
+    if (@file_exists('/proc/self/environ')) {
+        $raw = @file_get_contents('/proc/self/environ');
+        if ($raw) {
+            $lines = explode("\0", $raw);
+            foreach ($lines as $l) {
+                $p = explode('=', $l, 2);
+                if (count($p) === 2 && !empty($p[0])) {
+                    $vars[$p[0]] = $p[1];
+                }
+            }
+        }
+    }
+
+    // 2. Leer $_ENV
+    if (is_array($_ENV)) {
+        foreach ($_ENV as $k => $v) {
+            if (!isset($vars[$k]) && $v !== '') $vars[$k] = $v;
+        }
+    }
+
+    // 3. Leer $_SERVER
+    if (is_array($_SERVER)) {
+        foreach ($_SERVER as $k => $v) {
+            if (!isset($vars[$k]) && $v !== '' && is_string($v)) $vars[$k] = $v;
+        }
+    }
+
+    // 4. getenv
+    $keys = [
+        'MYSQLHOST', 'MYSQL_HOST', 'RAILWAY_MYSQL_HOST', 'MYSQLPUBLICPORT',
+        'MYSQLUSER', 'MYSQL_USER', 'RAILWAY_MYSQL_USER',
+        'MYSQLPASSWORD', 'MYSQL_PASSWORD', 'MYSQL_ROOT_PASSWORD',
+        'MYSQLDATABASE', 'MYSQL_DATABASE',
+        'MYSQLPORT', 'MYSQL_PORT',
+        'MYSQL_URL', 'MYSQLURL', 'DATABASE_URL', 'RAILWAY_DATABASE_URL'
+    ];
+    foreach ($keys as $k) {
+        $v = @getenv($k);
+        if ($v !== false && $v !== '' && !isset($vars[$k])) {
+            $vars[$k] = $v;
+        }
+        $v2 = @getenv($k, true);
+        if ($v2 !== false && $v2 !== '' && !isset($vars[$k])) {
+            $vars[$k] = $v2;
+        }
+    }
+
+    return $vars;
 }
 
 function getDBConnection() {
-    // Desactivar reportes de mysqli de forma segura comprobando la existencia de la función
     if (function_exists('mysqli_report')) {
         @mysqli_report(MYSQLI_REPORT_OFF);
     }
 
-    $url = getEnvVar('MYSQL_URL') ?: getEnvVar('MYSQLURL');
-    
-    $host = 'mysql.railway.internal';
-    $user = 'root';
-    $pass = 'vgELwtMeQfjleucGSRlgsUpGpoynJLvL';
-    $db   = 'railway';
-    $port = 3306;
+    $env = getSystemEnvVars();
 
-    if (!empty($url)) {
-        $parsed = parse_url($url);
-        if ($parsed) {
-            $host = isset($parsed['host']) ? $parsed['host'] : $host;
-            $user = isset($parsed['user']) ? $parsed['user'] : $user;
-            $pass = isset($parsed['pass']) ? $parsed['pass'] : $pass;
-            $db   = isset($parsed['path']) ? ltrim($parsed['path'], '/') : $db;
-            $port = isset($parsed['port']) ? (int)$parsed['port'] : $port;
+    // Intentar extraer host, usuario, clave, bd, puerto de URLs o variables individuales
+    $hosts = [];
+    $users = [];
+    $passes = [];
+    $dbs   = [];
+    $ports = [];
+
+    // Revisar si existe una URL de conexión en Railway
+    $urls = ['MYSQL_URL', 'MYSQLURL', 'DATABASE_URL', 'RAILWAY_DATABASE_URL', 'RAILWAY_MYSQL_URL'];
+    foreach ($urls as $u_key) {
+        if (!empty($env[$u_key])) {
+            $parsed = parse_url($env[$u_key]);
+            if ($parsed) {
+                if (isset($parsed['host'])) $hosts[] = $parsed['host'];
+                if (isset($parsed['user'])) $users[] = $parsed['user'];
+                if (isset($parsed['pass'])) $passes[] = $parsed['pass'];
+                if (isset($parsed['path'])) $dbs[] = ltrim($parsed['path'], '/');
+                if (isset($parsed['port'])) $ports[] = (int)$parsed['port'];
+            }
         }
-    } else {
-        $host = getEnvVar('MYSQLHOST') ?: getEnvVar('MYSQL_HOST') ?: getEnvVar('RAILWAY_MYSQL_HOST') ?: $host;
-        $user = getEnvVar('MYSQLUSER') ?: getEnvVar('MYSQL_USER') ?: getEnvVar('RAILWAY_MYSQL_USER') ?: $user;
-        $pass = getEnvVar('MYSQLPASSWORD') ?: getEnvVar('MYSQL_PASSWORD') ?: getEnvVar('MYSQL_ROOT_PASSWORD') ?: $pass;
-        $db   = getEnvVar('MYSQLDATABASE') ?: getEnvVar('MYSQL_DATABASE') ?: $db;
-        $port = (int)(getEnvVar('MYSQLPORT') ?: getEnvVar('MYSQL_PORT') ?: $port);
     }
+
+    // Extraer de variables individuales de Railway
+    if (!empty($env['MYSQLHOST'])) $hosts[] = $env['MYSQLHOST'];
+    if (!empty($env['MYSQL_HOST'])) $hosts[] = $env['MYSQL_HOST'];
+    if (!empty($env['RAILWAY_MYSQL_HOST'])) $hosts[] = $env['RAILWAY_MYSQL_HOST'];
+
+    if (!empty($env['MYSQLUSER'])) $users[] = $env['MYSQLUSER'];
+    if (!empty($env['MYSQL_USER'])) $users[] = $env['MYSQL_USER'];
+
+    if (!empty($env['MYSQLPASSWORD'])) $passes[] = $env['MYSQLPASSWORD'];
+    if (!empty($env['MYSQL_PASSWORD'])) $passes[] = $env['MYSQL_PASSWORD'];
+    if (!empty($env['MYSQL_ROOT_PASSWORD'])) $passes[] = $env['MYSQL_ROOT_PASSWORD'];
+
+    if (!empty($env['MYSQLDATABASE'])) $dbs[] = $env['MYSQLDATABASE'];
+    if (!empty($env['MYSQL_DATABASE'])) $dbs[] = $env['MYSQL_DATABASE'];
+
+    if (!empty($env['MYSQLPORT'])) $ports[] = (int)$env['MYSQLPORT'];
+    if (!empty($env['MYSQL_PORT'])) $ports[] = (int)$env['MYSQL_PORT'];
+
+    // Valores por defecto de Railway suministrados por el usuario
+    $hosts[] = 'mysql.railway.internal';
+    $hosts[] = '127.0.0.1';
+    $hosts[] = 'localhost';
+
+    $users[] = 'root';
+    $passes[] = 'vgELwtMeQfjleucGSRlgsUpGpoynJLvL';
+    $passes[] = 'root';
+    $passes[] = '';
+
+    $dbs[] = 'railway';
+    $dbs[] = 'users';
+
+    $ports[] = 3306;
+
+    // Limpiar duplicados manteniendo orden
+    $hosts = array_values(array_unique(array_filter($hosts)));
+    $users = array_values(array_unique(array_filter($users)));
+    $passes = array_values(array_unique($passes));
+    $dbs   = array_values(array_unique(array_filter($dbs)));
+    $ports = array_values(array_unique(array_filter($ports)));
 
     $conn = null;
+    $last_error = '';
 
-    // Verificar disponibilidad de la extensión mysqli
+    // Probar combinaciones con MySQLi si está disponible
     if (class_exists('mysqli')) {
-        // Intento 1: Conexión directa a la BD asignada
-        try {
-            $conn = @new mysqli($host, $user, $pass, $db, $port);
-        } catch (Throwable $e) {
-            $conn = null;
-        }
-
-        // Intento 2: Conexión con 'users'
-        if (!$conn || $conn->connect_error) {
-            try {
-                $conn_users = @new mysqli($host, $user, $pass, 'users', $port);
-                if ($conn_users && !$conn_users->connect_error) {
-                    $conn = $conn_users;
+        foreach ($hosts as $h) {
+            foreach ($ports as $prt) {
+                foreach ($users as $u) {
+                    foreach ($passes as $p) {
+                        foreach ($dbs as $d) {
+                            try {
+                                $c = @new mysqli($h, $u, $p, $d, $prt);
+                                if ($c && !$c->connect_error) {
+                                    $conn = $c;
+                                    break 5;
+                                }
+                                if ($c && $c->connect_error) {
+                                    $last_error = $c->connect_error;
+                                }
+                            } catch (Throwable $e) {
+                                $last_error = $e->getMessage();
+                            }
+                        }
+                    }
                 }
-            } catch (Throwable $e) {
-                $conn = null;
-            }
-        }
-
-        // Intento 3: Conexión sin BD para crearla
-        if (!$conn || $conn->connect_error) {
-            try {
-                $conn_nodb = @new mysqli($host, $user, $pass, '', $port);
-                if ($conn_nodb && !$conn_nodb->connect_error) {
-                    @$conn_nodb->query("CREATE DATABASE IF NOT EXISTS `$db` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;");
-                    @$conn_nodb->select_db($db);
-                    $conn = $conn_nodb;
-                }
-            } catch (Throwable $e) {
-                $conn = null;
-            }
-        }
-
-        // Intento 4: Localhost / 127.0.0.1
-        if (!$conn || $conn->connect_error) {
-            try {
-                $conn_local = @new mysqli('127.0.0.1', 'root', 'root', 'users', 3306);
-                if ($conn_local && !$conn_local->connect_error) {
-                    $conn = $conn_local;
-                }
-            } catch (Throwable $e) {
-                $conn = null;
-            }
-        }
-
-        if (!$conn || $conn->connect_error) {
-            try {
-                $conn_local2 = @new mysqli('localhost', 'root', '', 'railway', 3306);
-                if ($conn_local2 && !$conn_local2->connect_error) {
-                    $conn = $conn_local2;
-                }
-            } catch (Throwable $e) {
-                $conn = null;
             }
         }
     }
 
-    if (!$conn || (isset($conn->connect_error) && $conn->connect_error)) {
-        $err_details = $conn ? $conn->connect_error : "Extensión MySQL de PHP inaccesible o host no responde en $host:$port";
-        die("<!doctype html><html lang='es'><head><meta charset='UTF-8'><link rel='stylesheet' href='styles.css'></head><body style='padding:40px; font-family:sans-serif; text-align:center; background:#0D0E1C; color:white;'><h2>Error de Conexión a la Base de Datos</h2><p style='color:#ef4444;'>$err_details</p><p style='color:#B4AEFF;'>Servidor: <code>$host:$port</code> | BD: <code>$db</code> | Usuario: <code>$user</code></p></body></html>");
+    // Si MySQLi falló o no está instalado, probar con PDO (pdo_mysql)
+    if (!$conn && class_exists('PDO')) {
+        foreach ($hosts as $h) {
+            foreach ($ports as $prt) {
+                foreach ($users as $u) {
+                    foreach ($passes as $p) {
+                        foreach ($dbs as $d) {
+                            try {
+                                $dsn = "mysql:host=$h;port=$prt;dbname=$d;charset=utf8mb4";
+                                $pdo = @new PDO($dsn, $u, $p, [
+                                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                                ]);
+                                if ($pdo) {
+                                    $conn = new TokowDBPDO($pdo);
+                                    break 5;
+                                }
+                            } catch (Throwable $e) {
+                                $last_error = $e->getMessage();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!$conn) {
+        $found_hosts = implode(', ', $hosts);
+        $found_dbs = implode(', ', $dbs);
+        die("<!doctype html><html lang='es'><head><meta charset='UTF-8'><link rel='stylesheet' href='styles.css'></head><body style='padding:40px; font-family:sans-serif; text-align:center; background:#0D0E1C; color:white;'><h2>Error de conexión a la Base de Datos</h2><p style='color:#ef4444;'>No se pudo conectar a MySQL: $last_error</p><p style='color:#B4AEFF;'>Servidores probados: <code>$found_hosts</code> | BDs probadas: <code>$found_dbs</code></p></body></html>");
     }
 
     @$conn->set_charset("utf8mb4");
