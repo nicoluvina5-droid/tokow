@@ -225,6 +225,60 @@ if (!class_exists('TokowJSONDB')) {
                 $this->saveData($data);
                 return true;
             }
+            if (strpos($sql, 'FROM suscripciones s') !== false || strpos($sql, 'FROM `suscripciones` s') !== false) {
+                $target_uid = 0;
+                if (preg_match('/s\.id_usuario\s*=\s*(\d+)/i', $sql, $m_uid)) {
+                    $target_uid = (int)$m_uid[1];
+                }
+                if (preg_match('/u\.usuario\s*=\s*\'([^\']+)\'/i', $sql, $m_uname)) {
+                    $target_username = $m_uname[1];
+                    foreach ($data['usuarios'] as $u) {
+                        if ($u['usuario'] === $target_username) {
+                            $target_uid = (int)$u['id'];
+                            break;
+                        }
+                    }
+                }
+
+                $rows = [];
+                foreach ($data['suscripciones'] as $s) {
+                    $match_user = ($target_uid > 0) ? ((int)$s['id_usuario'] === $target_uid) : true;
+                    $match_active = (strpos($sql, "s.estado = 'Activa'") !== false) ? (isset($s['estado']) && $s['estado'] === 'Activa') : true;
+
+                    if ($match_user && $match_active) {
+                        $plan_obj = null;
+                        $target_plan_id = isset($s['id_plan']) ? (int)$s['id_plan'] : 1;
+                        foreach ($data['planes'] as $pl) {
+                            if ((int)$pl['id_plan'] === $target_plan_id) {
+                                $plan_obj = $pl;
+                                break;
+                            }
+                        }
+
+                        $rows[] = [
+                            'id_suscripcion'   => (int)$s['id_suscripcion'],
+                            'id_usuario'       => (int)$s['id_usuario'],
+                            'id_plan'          => $target_plan_id,
+                            'fecha_inicio'     => isset($s['fecha_inicio']) ? $s['fecha_inicio'] : date('Y-m-d'),
+                            'fecha_fin'        => isset($s['fecha_fin']) ? $s['fecha_fin'] : date('Y-m-d', strtotime('+1 month')),
+                            'estado'           => isset($s['estado']) ? $s['estado'] : 'Activa',
+                            'metodo_pago'      => isset($s['metodo_pago']) ? $s['metodo_pago'] : 'Tokow Pay (Simulado)',
+                            'plan_nombre'      => $plan_obj ? $plan_obj['nombre'] : 'Suscripción Normal Mensual',
+                            'precio'           => $plan_obj ? (float)$plan_obj['precio'] : 10.00,
+                            'duracion_meses'   => $plan_obj ? (int)$plan_obj['duracion_meses'] : 1,
+                            'max_dispositivos' => $plan_obj ? (int)$plan_obj['max_dispositivos'] : 1,
+                            'calidad_stream'   => $plan_obj ? $plan_obj['calidad_stream'] : '1080p 60fps'
+                        ];
+                    }
+                }
+
+                usort($rows, function($a, $b) {
+                    return (int)$b['id_suscripcion'] - (int)$a['id_suscripcion'];
+                });
+
+                return new TokowResultArray($rows);
+            }
+
             if (strpos($sql, 'FROM pagos p') !== false || strpos($sql, 'FROM `pagos` p') !== false) {
                 $rows = [];
                 foreach ($data['pagos'] as $p) {
