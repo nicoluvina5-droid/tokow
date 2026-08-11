@@ -1,0 +1,282 @@
+<?php
+session_start();
+require_once 'db.php';
+
+$usuario_logueado = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : null;
+$es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
+?>
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tokow — Cloud Gaming · Para Todos</title>
+  <meta name="description"
+    content="Juega videojuegos de alto rendimiento en cualquier dispositivo, sin PC gamer. Tokow es cloud gaming accesible para todos.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <header class="site-header">
+    <div class="wrap nav">
+      <a href="index.php" class="brand">
+        <span class="brand-mark"></span>
+        <span class="brand-text">Tokow</span>
+      </a>
+      <nav class="nav-links">
+        <a href="index.php" class="active">Inicio</a>
+        <a href="index.php#como-funciona">Cómo funciona</a>
+        <a href="precios.php">Precios y servicios</a>
+        <a href="nosotros.html">Acerca de</a>
+        <a href="play.php">¡A Jugar!</a>
+        <?php if ($es_admin): ?>
+          <a href="admin.php" style="color: var(--mint);">Admin Dashboard</a>
+        <?php endif; ?>
+      </nav>
+      <div class="nav-cta">
+        <?php if ($usuario_logueado): ?>
+          <span style="font-size: 14px; color: var(--lavender); margin-right: 12px;">🎮 @<?php echo htmlspecialchars($usuario_logueado); ?></span>
+          <a href="logout.php" class="btn btn-ghost">Cerrar sesión</a>
+        <?php else: ?>
+          <a href="login.php" class="btn btn-ghost">Iniciar sesión</a>
+          <a href="registro.php" class="btn btn-primary">Crear cuenta</a>
+        <?php endif; ?>
+      </div>
+      <button class="nav-toggle" aria-label="Abrir menú">☰</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <span class="eyebrow">Cloud Gaming en vivo</span>
+          <h1>Tu próximo nivel <em>no requiere</em> una PC gamer.</h1>
+          <p class="lede">Tokow transmite videojuegos de alto rendimiento directo a tu pantalla — celular, laptop o TV —
+            usando 5G y Edge Computing. Sin descargas, sin hardware costoso, sin excusas.</p>
+          <div class="hero-actions">
+            <a href="registro.php" class="btn btn-primary btn-lg">Empezar gratis</a>
+            <a href="precios.php" class="btn btn-ghost btn-lg">Ver planes</a>
+          </div>
+          <div class="hero-proof">
+            <div><strong id="statLatency">18ms</strong><span>Latencia promedio</span></div>
+            <div><strong>200+</strong><span>Títulos disponibles</span></div>
+            <div><strong>4K · 60fps</strong><span>Streaming máximo</span></div>
+          </div>
+        </div>
+
+        <div class="stream-frame">
+          <div class="stream-frame-bar">
+            <div class="stream-dots"><span></span><span></span><span></span></div>
+            <span class="eyebrow">Sesión en vivo</span>
+          </div>
+          <div class="stream-screen">
+            <svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7C6FF7" stop-opacity=".55" />
+                  <stop offset="1" stop-color="#4DC8A3" stop-opacity=".35" />
+                </linearGradient>
+              </defs>
+              <rect width="400" height="250" fill="url(#g1)" opacity=".25" />
+              <polygon points="60,210 140,90 200,150 260,70 340,210" fill="none" stroke="#B4AEFF" stroke-width="1.5"
+                opacity=".55" />
+              <circle cx="140" cy="90" r="4" fill="#4DC8A3" />
+              <circle cx="260" cy="70" r="4" fill="#7C6FF7" />
+              <g opacity=".5" stroke="#FFFFFF" stroke-width=".6">
+                <line x1="0" y1="60" x2="400" y2="60" />
+                <line x1="0" y1="125" x2="400" y2="125" />
+                <line x1="0" y1="190" x2="400" y2="190" />
+              </g>
+            </svg>
+            <div class="hud hud-top-left">
+              <div class="hud-row"><span class="hud-dot"></span> EN VIVO</div>
+              <div class="hud-row">PING <span class="val" id="hudPing">17ms</span></div>
+              <div class="hud-row">FPS <span class="val" id="hudFps">60</span></div>
+            </div>
+            <div class="hud hud-top-right">
+              <div>RES <span class="val purple">2160p</span></div>
+              <div>REGIÓN <span class="val purple">MTY-01</span></div>
+            </div>
+          </div>
+          <div class="stream-controls">
+            <div class="device-row">
+              <span class="device-chip on">Móvil</span>
+              <span class="device-chip">Laptop</span>
+              <span class="device-chip">TV</span>
+            </div>
+            <span class="eyebrow" style="color:var(--lavender)">Edge · MTY</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CÓMO FUNCIONA -->
+    <section id="como-funciona">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Cómo funciona</span>
+          <h2>De la pantalla al juego en tres pasos.</h2>
+          <p>Sin instalaciones eternas ni configuraciones complicadas — así de directo es empezar en Tokow.</p>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <span class="step-index">01 / Elige</span>
+            <h3>Elige tu plan</h3>
+            <p>Selecciona el plan según los juegos que quieras y la calidad de streaming que necesitas.</p>
+          </div>
+          <div class="step">
+            <span class="step-index">02 / Conecta</span>
+            <h3>Conéctate desde cualquier lugar</h3>
+            <p>Abre Tokow en tu celular, laptop o TV. Tu progreso y biblioteca te siguen a donde vayas.</p>
+          </div>
+          <div class="step">
+            <span class="step-index">03 / Juega</span>
+            <h3>Juega al instante</h3>
+            <p>El juego corre en la nube y se transmite a tu pantalla en segundos, sin descargas.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="section-alt">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Por qué Tokow</span>
+          <h2>Gaming de alto rendimiento, sin barreras.</h2>
+          <p>Tres cosas guían cada decisión que tomamos sobre la plataforma.</p>
+        </div>
+        <div class="cards3">
+          <div class="card">
+            <div class="card-icon" style="background:rgba(124,111,247,.16)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B4AEFF" stroke-width="2">
+                <path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7l-9-5Z" />
+              </svg>
+            </div>
+            <h3>Inclusivo</h3>
+            <p>Gaming de alto rendimiento para todos, sin importar el presupuesto ni el equipo que tengas.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" style="background:rgba(77,200,163,.16)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4DC8A3" stroke-width="2">
+                <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />
+              </svg>
+            </div>
+            <h3>Veloz</h3>
+            <p>Baja latencia y respuesta inmediata gracias a redes 5G y Edge Computing distribuido.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon" style="background:rgba(124,111,247,.16)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B4AEFF" stroke-width="2">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M3 12h18M12 3c2.5 2.6 4 6 4 9s-1.5 6.4-4 9c-2.5-2.6-4-6-4-9s1.5-6.4 4-9Z" />
+              </svg>
+            </div>
+            <h3>Conectado</h3>
+            <p>Juega desde cualquier dispositivo, en cualquier lugar del mundo, sin perder tu progreso.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRECIOS PREVIEW -->
+    <section class="section-alt">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Precios</span>
+          <h2>Un plan para cada forma de jugar.</h2>
+          <p>Cancela cuando quieras. Sin contratos, sin letras chiquitas.</p>
+        </div>
+        <div class="pricing-grid">
+          <div class="plan">
+            <h3>Suscripción Normal</h3>
+            <div class="price">$10<span>USD / mes</span></div>
+            <p class="price-note">1080p · 60fps · 1 Dispositivo</p>
+            <ul class="plan-feat">
+              <li>✓ Acceso a 80+ juegos</li>
+              <li>✓ 1 dispositivo a la vez</li>
+              <li>✓ Soporte por correo 24/7</li>
+            </ul>
+            <a href="checkout.php?plan=normal_mensual" class="btn btn-ghost btn-block">Elegir Normal ($10 USD)</a>
+          </div>
+          <div class="plan featured">
+            <span class="plan-tag">Más popular</span>
+            <h3>Suscripción Premium</h3>
+            <div class="price">$20<span>USD / mes</span></div>
+            <p class="price-note">4K · 60fps · 3 Dispositivos</p>
+            <ul class="plan-feat">
+              <li>✓ Catálogo completo (200+)</li>
+              <li>✓ 3 dispositivos simultáneos</li>
+              <li>✓ Prioridad en Servidores Edge</li>
+            </ul>
+            <a href="checkout.php?plan=premium_mensual" class="btn btn-primary btn-block">Elegir Premium ($20 USD)</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="index.php" class="brand"><span class="brand-mark"></span><span class="brand-text">Tokow</span></a>
+          <p>Cloud gaming accesible para todos. Juega donde quieras, como quieras.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Producto</h5>
+          <ul>
+            <li><a href="precios.php">Precios y servicios</a></li>
+            <li><a href="index.php#como-funciona">Cómo funciona</a></li>
+            <li><a href="precios.php">Catálogo de juegos</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Empresa</h5>
+          <ul>
+            <li><a href="nosotros.html">Acerca de nosotros</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Cuenta</h5>
+          <ul>
+            <li><a href="login.php">Iniciar sesión</a></li>
+            <li><a href="registro.php">Crear cuenta</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2025 Tokow · Universidad Politécnica de Victoria</span>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/tokow.oficial/" target="_blank" aria-label="Instagram">◎ Instagram</a>
+          <a href="https://www.facebook.com/profile.php?id=61592803082599" target="_blank" aria-label="Facebook">󰈌 Facebook</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const pingEl = document.getElementById('hudPing');
+    const fpsEl = document.getElementById('hudFps');
+    const statEl = document.getElementById('statLatency');
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setInterval(() => {
+        const ping = 14 + Math.floor(Math.random() * 10);
+        const fps = Math.random() > .15 ? 60 : 59;
+        if (pingEl) pingEl.textContent = ping + 'ms';
+        if (fpsEl) fpsEl.textContent = fps;
+        if (statEl) statEl.textContent = ping + 'ms';
+      }, 1800);
+    }
+  </script>
+</body>
+
+</html>
