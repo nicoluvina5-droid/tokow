@@ -76,6 +76,36 @@ if (!$suscripcion_info) {
     } catch (Throwable $e) {}
 }
 
+if (!$suscripcion_info) {
+    try {
+        $u_esc = addslashes($usuario_nombre);
+        $res_name = @$conn->query("SELECT s.id_suscripcion, s.id_plan, s.fecha_inicio, s.fecha_fin, s.estado, s.metodo_pago,
+                                        p.nombre as plan_nombre, p.precio, p.duracion_meses, p.max_dispositivos, p.calidad_stream
+                                 FROM suscripciones s
+                                 JOIN planes p ON s.id_plan = p.id_plan
+                                 JOIN usuarios u ON s.id_usuario = u.id
+                                 WHERE u.usuario = '$u_esc' AND s.estado = 'Activa'
+                                 ORDER BY s.id_suscripcion DESC LIMIT 1");
+        if ($res_name && $res_name->num_rows > 0) {
+            $suscripcion_info = $res_name->fetch_assoc();
+        }
+    } catch (Throwable $e) {}
+}
+
+if (!$suscripcion_info) {
+    try {
+        $res_any = @$conn->query("SELECT s.id_suscripcion, s.id_plan, s.fecha_inicio, s.fecha_fin, s.estado, s.metodo_pago,
+                                       p.nombre as plan_nombre, p.precio, p.duracion_meses, p.max_dispositivos, p.calidad_stream
+                                FROM suscripciones s
+                                JOIN planes p ON s.id_plan = p.id_plan
+                                WHERE s.id_usuario = $usuario_id
+                                ORDER BY s.id_suscripcion DESC LIMIT 1");
+        if ($res_any && $res_any->num_rows > 0) {
+            $suscripcion_info = $res_any->fetch_assoc();
+        }
+    } catch (Throwable $e) {}
+}
+
 if (!$suscripcion_info && $es_admin) {
     $suscripcion_info = [
         'plan_nombre' => 'Administrador de Plataforma (Acceso Total)',

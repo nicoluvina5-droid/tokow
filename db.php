@@ -26,10 +26,18 @@ if (!class_exists('TokowStmtPDO')) {
         private $stmt;
         private $db;
         private $params = [];
+        public $insert_id = 0;
 
         public function __construct($stmt, $db) {
             $this->stmt = $stmt;
             $this->db = $db;
+        }
+
+        public function __get($name) {
+            if ($name === 'insert_id') {
+                return isset($this->db->insert_id) ? (int)$this->db->insert_id : (int)$this->insert_id;
+            }
+            return null;
         }
 
         public function bind_param($types, ...$args) {
@@ -42,6 +50,7 @@ if (!class_exists('TokowStmtPDO')) {
                 $res = $this->stmt->execute($this->params);
                 if (method_exists($this->db, 'setInsertId')) {
                     $this->db->setInsertId();
+                    $this->insert_id = $this->db->insert_id;
                 }
                 return $res;
             } catch (Throwable $e) {
@@ -303,10 +312,18 @@ if (!class_exists('TokowJSONStmt')) {
         private $sql;
         private $db;
         private $params = [];
+        public $insert_id = 0;
 
         public function __construct($sql, $db) {
             $this->sql = $sql;
             $this->db = $db;
+        }
+
+        public function __get($name) {
+            if ($name === 'insert_id') {
+                return isset($this->db->insert_id) ? (int)$this->db->insert_id : (int)$this->insert_id;
+            }
+            return null;
         }
 
         public function bind_param($types, ...$args) {
@@ -741,6 +758,29 @@ function usuarioTieneSuscripcionActiva($conn, $usuario_id) {
     if (!$usuario_id) return false;
 
     try {
+        $stmt = @$conn->prepare("SELECT s.id_suscripcion, p.nombre as plan_nombre, s.fecha_fin 
+                               FROM suscripciones s 
+                               JOIN planes p ON s.id_plan = p.id_plan 
+                               WHERE s.id_usuario = ? AND s.estado = 'Activa'
+                               ORDER BY s.id_suscripcion DESC LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("i", $usuario_id);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $suscripcion = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($suscripcion) return $suscripcion;
+        }
+
+        $res_dir = @$conn->query("SELECT s.id_suscripcion, p.nombre as plan_nombre, s.fecha_fin 
+                                  FROM suscripciones s 
+                                  JOIN planes p ON s.id_plan = p.id_plan 
+                                  WHERE s.id_usuario = $usuario_id AND s.estado = 'Activa' 
+                                  ORDER BY s.id_suscripcion DESC LIMIT 1");
+        if ($res_dir && $res_dir->num_rows > 0) {
+            return $res_dir->fetch_assoc();
+        }
+
         $stmt_u = @$conn->prepare("SELECT usuario FROM usuarios WHERE id = ?");
         if ($stmt_u) {
             $stmt_u->bind_param("i", $usuario_id);
@@ -752,20 +792,6 @@ function usuarioTieneSuscripcionActiva($conn, $usuario_id) {
             if ($row_u && (strtolower($row_u['usuario']) === 'admin' || strtolower($row_u['usuario']) === 'leo')) {
                 return ['plan_nombre' => 'Administrador (Acceso Total)', 'fecha_fin' => 'Ilimitado'];
             }
-        }
-
-        $stmt = @$conn->prepare("SELECT s.id_suscripcion, p.nombre as plan_nombre, s.fecha_fin 
-                               FROM suscripciones s 
-                               JOIN planes p ON s.id_plan = p.id_plan 
-                               WHERE s.id_usuario = ? AND s.estado = 'Activa' AND (s.fecha_fin IS NULL OR s.fecha_fin >= CURDATE())
-                               ORDER BY s.id_suscripcion DESC LIMIT 1");
-        if ($stmt) {
-            $stmt->bind_param("i", $usuario_id);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $suscripcion = $res ? $res->fetch_assoc() : null;
-            $stmt->close();
-            return $suscripcion ? $suscripcion : false;
         }
     } catch (Throwable $e) {
         return false;
