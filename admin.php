@@ -149,6 +149,7 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, u.es_admin, s.estad
     FROM usuarios u 
     LEFT JOIN suscripciones s ON u.id = s.id_usuario AND s.estado = 'Activa' 
     LEFT JOIN planes pl ON s.id_plan = pl.id_plan 
+    GROUP BY u.id
     ORDER BY u.id DESC");
 ?>
 <!doctype html>
@@ -417,14 +418,34 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, u.es_admin, s.estad
                   <?php endif; ?>
                 </td>
                 <td>
-                  <?php if ($usr['sub_estado'] === 'Activa'): ?>
+                  <?php if ($usr['sub_estado'] === 'Activa' || $usr_is_admin): ?>
                     <span class="badge-active">Activa ✓</span>
                   <?php else: ?>
                     <span class="badge-inactive">Sin suscripción</span>
                   <?php endif; ?>
                 </td>
-                <td><?php echo $usr['plan_nombre'] ? htmlspecialchars($usr['plan_nombre']) : '—'; ?></td>
-                <td><?php echo $usr['fecha_fin'] ? htmlspecialchars($usr['fecha_fin']) : '—'; ?></td>
+                <td>
+                  <?php 
+                    if ($usr['plan_nombre'] && $usr['plan_nombre'] !== '—') {
+                        echo htmlspecialchars($usr['plan_nombre']);
+                    } elseif ($usr_is_admin) {
+                        echo 'Acceso Admin VIP';
+                    } else {
+                        echo '—';
+                    }
+                  ?>
+                </td>
+                <td>
+                  <?php 
+                    if ($usr['fecha_fin'] && $usr['fecha_fin'] !== '—') {
+                        echo htmlspecialchars($usr['fecha_fin']);
+                    } elseif ($usr_is_admin) {
+                        echo 'Ilimitado';
+                    } else {
+                        echo '—';
+                    }
+                  ?>
+                </td>
                 <td>
                   <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
                     <button type="button" onclick="openEditModal(<?php echo $usr['id']; ?>, '<?php echo htmlspecialchars($usr['usuario'], ENT_QUOTES); ?>', <?php echo $usr_is_admin ? 1 : 0; ?>)" class="action-btn-sm" style="background: rgba(124, 111, 247, 0.25); color: #B4AEFF;">✏️ Editar</button>

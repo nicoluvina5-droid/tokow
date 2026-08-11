@@ -310,17 +310,25 @@ if (!class_exists('TokowJSONDB')) {
                 $rows = [];
                 foreach ($data['usuarios'] as $u) {
                     $sub = null;
-                    foreach ($data['suscripciones'] as $s) {
-                        if ($s['id_usuario'] == $u['id'] && $s['estado'] === 'Activa') { $sub = $s; break; }
+                    // Sort user subscriptions DESC to find latest active
+                    $u_subs = array_filter($data['suscripciones'], function($s) use ($u) {
+                        return ((int)$s['id_usuario'] === (int)$u['id']) && isset($s['estado']) && $s['estado'] === 'Activa';
+                    });
+                    usort($u_subs, function($a, $b) {
+                        return (int)$b['id_suscripcion'] - (int)$a['id_suscripcion'];
+                    });
+                    if (!empty($u_subs)) {
+                        $sub = reset($u_subs);
                     }
+
                     $plan = null;
                     if ($sub) {
                         foreach ($data['planes'] as $pl) {
-                            if ($pl['id_plan'] == $sub['id_plan']) { $plan = $pl; break; }
+                            if ((int)$pl['id_plan'] === (int)$sub['id_plan']) { $plan = $pl; break; }
                         }
                     }
                     $rows[] = [
-                        'id' => $u['id'],
+                        'id' => (int)$u['id'],
                         'usuario' => $u['usuario'],
                         'es_admin' => isset($u['es_admin']) ? (int)$u['es_admin'] : 0,
                         'sub_estado' => $sub ? $sub['estado'] : 'Inactiva',
