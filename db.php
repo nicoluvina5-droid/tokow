@@ -811,6 +811,7 @@ function getDBConnection() {
 function asegurarPlanesBásicos($conn) {
     try {
         @$conn->query("ALTER TABLE `usuarios` MODIFY COLUMN `contraseña` VARCHAR(255) NOT NULL;");
+        @$conn->query("ALTER TABLE `usuarios` MODIFY COLUMN `usuario` VARCHAR(50) NOT NULL;");
     } catch (Throwable $e) {}
 
     try {
