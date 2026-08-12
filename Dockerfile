@@ -1,20 +1,16 @@
-FROM php:8.2-apache
+FROM php:8.2-cli
 
 # Instalar extensiones de MySQL requeridas
 RUN docker-php-ext-install pdo pdo_mysql mysqli
 
-# Habilitar mod_rewrite para Apache
-RUN a2enmod rewrite
+# Directorio de trabajo
+WORKDIR /var/www/html
 
-# Copiar todo el código del proyecto al directorio web
-COPY . /var/www/html/
+# Copiar todo el código del proyecto
+COPY . /var/www/html
 
-# Configurar permisos
-RUN chown -R www-data:www-data /var/www/html
+ENV PORT=8080
+EXPOSE 8080
 
-# Configurar Apache para adaptarse al puerto dinámico $PORT asignado por Railway
-RUN sed -i 's/80/${PORT}/g' /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf
-
-ENV PORT=80
-
-CMD ["apache2-foreground"]
+# Iniciar servidor ejecutable de PHP directamente en el puerto dinámico $PORT asignado por Railway
+CMD ["sh", "-c", "php -S 0.0.0.0:${PORT}"]
