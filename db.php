@@ -683,125 +683,111 @@ function getDBConnection() {
 
     $env = getSystemEnvVars();
 
-    $hosts = [];
-    $users = [];
-    $passes = [];
-    $dbs   = [];
-    $ports = [];
+    // Construir lista estructurada de candidatos sin productos cartesianos masivos
+    $candidates = [];
 
-    $urls = ['MYSQL_URL', 'MYSQLURL', 'DATABASE_URL', 'RAILWAY_DATABASE_URL', 'RAILWAY_MYSQL_URL'];
+    // 1. URLs de conexión directa de Railway/Cloud (MYSQL_URL, DATABASE_URL, etc.)
+    $urls = ['MYSQL_URL', 'MYSQLURL', 'DATABASE_URL', 'RAILWAY_DATABASE_URL', 'RAILWAY_MYSQL_URL', 'MYSQLPUBLICURL'];
     foreach ($urls as $u_key) {
         if (!empty($env[$u_key])) {
             $parsed = parse_url($env[$u_key]);
-            if ($parsed) {
-                if (isset($parsed['host'])) $hosts[] = $parsed['host'];
-                if (isset($parsed['user'])) $users[] = $parsed['user'];
-                if (isset($parsed['pass'])) $passes[] = $parsed['pass'];
-                if (isset($parsed['path'])) $dbs[] = ltrim($parsed['path'], '/');
-                if (isset($parsed['port'])) $ports[] = (int)$parsed['port'];
+            if ($parsed && isset($parsed['host'])) {
+                $candidates[] = [
+                    'host' => $parsed['host'],
+                    'port' => isset($parsed['port']) ? (int)$parsed['port'] : 3306,
+                    'user' => isset($parsed['user']) ? $parsed['user'] : 'root',
+                    'pass' => isset($parsed['pass']) ? urldecode($parsed['pass']) : '',
+                    'db'   => isset($parsed['path']) ? ltrim($parsed['path'], '/') : 'railway'
+                ];
             }
         }
     }
 
-    if (!empty($env['DB_HOST'])) $hosts[] = $env['DB_HOST'];
-    if (!empty($env['MYSQLHOST'])) $hosts[] = $env['MYSQLHOST'];
-    if (!empty($env['MYSQL_HOST'])) $hosts[] = $env['MYSQL_HOST'];
-    if (!empty($env['RAILWAY_MYSQL_HOST'])) $hosts[] = $env['RAILWAY_MYSQL_HOST'];
+    // 2. Variables de entorno individuales
+    $env_host = !empty($env['DB_HOST']) ? $env['DB_HOST'] : (!empty($env['MYSQLHOST']) ? $env['MYSQLHOST'] : (!empty($env['MYSQL_HOST']) ? $env['MYSQL_HOST'] : (!empty($env['RAILWAY_MYSQL_HOST']) ? $env['RAILWAY_MYSQL_HOST'] : '')));
+    $env_user = !empty($env['DB_USER']) ? $env['DB_USER'] : (!empty($env['MYSQLUSER']) ? $env['MYSQLUSER'] : (!empty($env['MYSQL_USER']) ? $env['MYSQL_USER'] : 'root'));
+    $env_pass = !empty($env['DB_PASSWORD']) ? $env['DB_PASSWORD'] : (!empty($env['DB_PASS']) ? $env['DB_PASS'] : (!empty($env['MYSQLPASSWORD']) ? $env['MYSQLPASSWORD'] : (!empty($env['MYSQL_PASSWORD']) ? $env['MYSQL_PASSWORD'] : (!empty($env['MYSQL_ROOT_PASSWORD']) ? $env['MYSQL_ROOT_PASSWORD'] : ''))));
+    $env_db   = !empty($env['DB_NAME']) ? $env['DB_NAME'] : (!empty($env['DB_DATABASE']) ? $env['DB_DATABASE'] : (!empty($env['MYSQLDATABASE']) ? $env['MYSQLDATABASE'] : (!empty($env['MYSQL_DATABASE']) ? $env['MYSQL_DATABASE'] : 'railway')));
+    $env_port = !empty($env['DB_PORT']) ? (int)$env['DB_PORT'] : (!empty($env['MYSQLPORT']) ? (int)$env['MYSQLPORT'] : (!empty($env['MYSQL_PORT']) ? (int)$env['MYSQL_PORT'] : 3306));
 
-    if (!empty($env['DB_USER'])) $users[] = $env['DB_USER'];
-    if (!empty($env['MYSQLUSER'])) $users[] = $env['MYSQLUSER'];
-    if (!empty($env['MYSQL_USER'])) $users[] = $env['MYSQL_USER'];
+    if (!empty($env_host)) {
+        $candidates[] = [
+            'host' => $env_host,
+            'port' => $env_port,
+            'user' => $env_user,
+            'pass' => $env_pass,
+            'db'   => $env_db
+        ];
+    }
 
-    if (!empty($env['DB_PASSWORD'])) $passes[] = $env['DB_PASSWORD'];
-    if (!empty($env['DB_PASS'])) $passes[] = $env['DB_PASS'];
-    if (!empty($env['MYSQLPASSWORD'])) $passes[] = $env['MYSQLPASSWORD'];
-    if (!empty($env['MYSQL_PASSWORD'])) $passes[] = $env['MYSQL_PASSWORD'];
-    if (!empty($env['MYSQL_ROOT_PASSWORD'])) $passes[] = $env['MYSQL_ROOT_PASSWORD'];
+    // 3. Fallbacks internos predeterminados de Railway
+    $candidates[] = [
+        'host' => 'mysql.railway.internal',
+        'port' => 3306,
+        'user' => 'root',
+        'pass' => !empty($env_pass) ? $env_pass : 'vgELwtMeQfjleucGSRlgsUpGpoynJLvL',
+        'db'   => !empty($env_db) ? $env_db : 'railway'
+    ];
 
-    if (!empty($env['DB_NAME'])) $dbs[] = $env['DB_NAME'];
-    if (!empty($env['DB_DATABASE'])) $dbs[] = $env['DB_DATABASE'];
-    if (!empty($env['MYSQLDATABASE'])) $dbs[] = $env['MYSQLDATABASE'];
-    if (!empty($env['MYSQL_DATABASE'])) $dbs[] = $env['MYSQL_DATABASE'];
+    // 4. Servidores locales estándar
+    $candidates[] = ['host' => '127.0.0.1', 'port' => 3306, 'user' => 'root', 'pass' => 'root', 'db' => 'railway'];
+    $candidates[] = ['host' => '127.0.0.1', 'port' => 3306, 'user' => 'root', 'pass' => '', 'db' => 'railway'];
+    $candidates[] = ['host' => 'localhost', 'port' => 3306, 'user' => 'root', 'pass' => 'root', 'db' => 'railway'];
+    $candidates[] = ['host' => 'localhost', 'port' => 3306, 'user' => 'root', 'pass' => '', 'db' => 'railway'];
 
-    if (!empty($env['DB_PORT'])) $ports[] = (int)$env['DB_PORT'];
-    if (!empty($env['MYSQLPORT'])) $ports[] = (int)$env['MYSQLPORT'];
-    if (!empty($env['MYSQL_PORT'])) $ports[] = (int)$env['MYSQL_PORT'];
-
-    $hosts[] = 'mysql.railway.internal';
-    $hosts[] = '127.0.0.1';
-    $hosts[] = 'localhost';
-
-    $users[] = 'root';
-
-    $passes[] = 'vgELwtMeQfjleucGSRlgsUpGpoynJLvL';
-    $passes[] = 'root';
-    $passes[] = '';
-
-    $dbs[] = 'railway';
-    $dbs[] = 'users';
-
-    $ports[] = 3306;
-
-    $hosts = array_values(array_unique(array_filter($hosts)));
-    $users = array_values(array_unique(array_filter($users)));
-    $passes = array_values(array_unique($passes));
-    $dbs   = array_values(array_unique(array_filter($dbs)));
-    $ports = array_values(array_unique(array_filter($ports)));
+    // Eliminar duplicados
+    $seen = [];
+    $unique_candidates = [];
+    foreach ($candidates as $cand) {
+        $key = $cand['host'] . ':' . $cand['port'] . ':' . $cand['user'] . ':' . $cand['db'];
+        if (!isset($seen[$key])) {
+            $seen[$key] = true;
+            $unique_candidates[] = $cand;
+        }
+    }
 
     $conn = null;
 
-    // 1. Probar con MySQLi si está instalado
+    // Intentar con MySQLi usando timeout rápido de 2s
     if (class_exists('mysqli')) {
-        foreach ($hosts as $h) {
-            foreach ($ports as $prt) {
-                foreach ($users as $u) {
-                    foreach ($passes as $p) {
-                        foreach ($dbs as $d) {
-                            try {
-                                $c = @new mysqli($h, $u, $p, $d, $prt);
-                                if ($c && !$c->connect_error) {
-                                    $conn = $c;
-                                    $g_db_connection_type = "MySQL Servidor (Conectado a $d@$h)";
-                                    break 5;
-                                }
-                            } catch (Throwable $e) {}
-                        }
+        foreach ($unique_candidates as $cand) {
+            try {
+                $c = mysqli_init();
+                if ($c) {
+                    @mysqli_options($c, MYSQLI_OPT_CONNECT_TIMEOUT, 2);
+                    if (@mysqli_real_connect($c, $cand['host'], $cand['user'], $cand['pass'], $cand['db'], $cand['port'])) {
+                        $conn = $c;
+                        $g_db_connection_type = "MySQL Servidor (Conectado a " . $cand['db'] . "@" . $cand['host'] . ")";
+                        break;
                     }
                 }
-            }
+            } catch (Throwable $e) {}
         }
     }
 
-    // 2. Probar con PDO si pdo_mysql está activo
+    // Intentar con PDO usando timeout rápido de 2s
     if (!$conn && class_exists('PDO') && in_array('mysql', PDO::getAvailableDrivers())) {
-        foreach ($hosts as $h) {
-            foreach ($ports as $prt) {
-                foreach ($users as $u) {
-                    foreach ($passes as $p) {
-                        foreach ($dbs as $d) {
-                            try {
-                                $dsn = "mysql:host=$h;port=$prt;dbname=$d;charset=utf8mb4";
-                                $pdo = @new PDO($dsn, $u, $p, [
-                                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-                                ]);
-                                if ($pdo) {
-                                    $conn = new TokowDBPDO($pdo);
-                                    $g_db_connection_type = "PDO MySQL (Conectado a $d@$h)";
-                                    break 5;
-                                }
-                            } catch (Throwable $e) {}
-                        }
-                    }
+        foreach ($unique_candidates as $cand) {
+            try {
+                $dsn = "mysql:host=" . $cand['host'] . ";port=" . $cand['port'] . ";dbname=" . $cand['db'] . ";charset=utf8mb4";
+                $pdo = @new PDO($dsn, $cand['user'], $cand['pass'], [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_TIMEOUT => 2
+                ]);
+                if ($pdo) {
+                    $conn = new TokowDBPDO($pdo);
+                    $g_db_connection_type = "PDO MySQL (Conectado a " . $cand['db'] . "@" . $cand['host'] . ")";
+                    break;
                 }
-            }
+            } catch (Throwable $e) {}
         }
     }
 
-    // 3. Fallback de Alta Disponibilidad: TokowJSONDB
+    // Fallback de Alta Disponibilidad
     if (!$conn) {
         $conn = new TokowJSONDB();
-        $g_db_connection_type = "Archivo JSON (tokow_db.json)";
+        $g_db_connection_type = "Archivo JSON Fallback (tokow_db.json)";
     }
 
     @$conn->set_charset("utf8mb4");
