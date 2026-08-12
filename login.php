@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <div class="auth-form-wrap">
     <form class="auth-form" method="POST" action="">
-      <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
+      <img src="logo.png" alt="Tokow Logo" class="brand-logo-img">
       <span class="eyebrow">Acceso</span>
       <h1 style="margin-top:14px;">Inicia sesión</h1>
       <p>Introduce tus datos para continuar jugando.</p>

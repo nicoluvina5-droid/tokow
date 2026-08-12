@@ -68,7 +68,10 @@ $es_admin = isset($_SESSION['es_admin']) && $_SESSION['es_admin'] == 1;
               <span>󰈌</span> Facebook
             </a>
           </div>
-          <span class="eyebrow">Cloud Gaming en vivo</span>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <img src="logo.png" alt="Tokow Logo" class="brand-logo-img" style="margin-bottom:0;">
+            <span class="eyebrow" style="margin:0;">Cloud Gaming en vivo</span>
+          </div>
           <h1>Tu próximo nivel <em>no requiere</em> una PC gamer.</h1>
           <p class="lede">Tokow transmite videojuegos de alto rendimiento directo a tu pantalla — celular, laptop o TV —
             usando 5G y Edge Computing. Sin descargas, sin hardware costoso, sin excusas.</p>

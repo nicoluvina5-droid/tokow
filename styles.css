@@ -143,12 +143,28 @@ button{ font-family:inherit; cursor:pointer; }
   text-transform:uppercase;
 }
 .brand-mark{
-  width:14px; height:14px;
-  border-radius:50%;
-  background:linear-gradient(135deg,var(--purple),var(--mint));
-  box-shadow:0 0 12px var(--purple-glow);
-  animation:pulse-glow 2.4s infinite ease-in-out;
+  width:32px; height:32px;
+  background-image:url('logo.png');
+  background-size:contain;
+  background-repeat:no-repeat;
+  background-position:center;
+  filter:drop-shadow(0 0 10px rgba(124, 111, 247, 0.6));
   flex-shrink:0;
+  display:inline-block;
+  vertical-align:middle;
+}
+.brand-logo-img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 18px rgba(124, 111, 247, 0.7));
+  animation: float 4s ease-in-out infinite;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
 .brand span.brand-text{
   background:linear-gradient(to right, #ffffff, var(--lavender), var(--mint));

@@ -39,8 +39,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     if ($success) {
-                        $new_id = $stmt_insert->insert_id;
+                        $new_id = (int)$stmt_insert->insert_id;
+                        if (!$new_id && isset($conn->insert_id)) {
+                            $new_id = (int)$conn->insert_id;
+                        }
                         $stmt_insert->close();
+
+                        if (!$new_id) {
+                            $u_safe = addslashes($usuario);
+                            $res_find_id = @$conn->query("SELECT id FROM usuarios WHERE usuario = '$u_safe'");
+                            if ($res_find_id && $res_find_id->num_rows > 0) {
+                                $row_fid = $res_find_id->fetch_assoc();
+                                $new_id = (int)$row_fid['id'];
+                            }
+                        }
                         
                         $_SESSION['usuario_id'] = (int)$new_id;
                         $_SESSION['usuario'] = $usuario;
@@ -122,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <div class="auth-form-wrap">
     <form class="auth-form" method="POST" action="">
-      <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
+      <img src="logo.png" alt="Tokow Logo" class="brand-logo-img">
       <span class="eyebrow">Registro</span>
       <h1 style="margin-top:14px;">Crea tu cuenta</h1>
       <p>Menos de un minuto para tu primer juego en la nube.</p>

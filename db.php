@@ -686,6 +686,15 @@ function getDBConnection() {
     // Construir lista estructurada de candidatos sin productos cartesianos masivos
     $candidates = [];
 
+    // 0. Credenciales Públicas de Railway proporcionadas por el usuario
+    $candidates[] = [
+        'host' => 'altaria.proxy.rlwy.net',
+        'port' => 11512,
+        'user' => 'root',
+        'pass' => 'vgELwtMeQfjleucGSRlgsUpGpoynJLvL',
+        'db'   => 'railway'
+    ];
+
     // 1. URLs de conexión directa de Railway/Cloud (MYSQL_URL, DATABASE_URL, etc.)
     $urls = ['MYSQL_URL', 'MYSQLURL', 'DATABASE_URL', 'RAILWAY_DATABASE_URL', 'RAILWAY_MYSQL_URL', 'MYSQLPUBLICURL'];
     foreach ($urls as $u_key) {
