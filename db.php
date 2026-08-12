@@ -129,12 +129,7 @@ if (!class_exists('TokowJSONDB')) {
             if (!file_exists(self::$filePath)) {
                 $initialData = [
                     'usuarios' => [
-                        ['id' => 1, 'usuario' => 'leo', 'contraseña' => 'pan12', 'es_admin' => 0],
-                        ['id' => 2, 'usuario' => 'leo2', 'contraseña' => 'pan12', 'es_admin' => 0],
-                        ['id' => 3, 'usuario' => 'pan1', 'contraseña' => '$2y$10$Vma.fpy/QBsqf', 'es_admin' => 0],
-                        ['id' => 4, 'usuario' => 'pan12', 'contraseña' => '$2y$10$DnEyNx.uxGE05', 'es_admin' => 0],
-                        ['id' => 5, 'usuario' => 'panadero3000', 'contraseña' => '123', 'es_admin' => 0],
-                        ['id' => 6, 'usuario' => 'admin', 'contraseña' => password_hash('admin123', PASSWORD_BCRYPT), 'es_admin' => 1]
+                        ['id' => 1, 'usuario' => 'admin', 'contraseña' => password_hash('admin123', PASSWORD_BCRYPT), 'es_admin' => 1]
                     ],
                     'planes' => [
                         ['id_plan' => 1, 'nombre' => 'Suscripción Normal Mensual', 'precio' => 10.00, 'duracion_meses' => 1, 'max_dispositivos' => 1, 'calidad_stream' => '1080p 60fps', 'activo' => 1],
@@ -603,8 +598,34 @@ if (!class_exists('TokowJSONStmt')) {
     }
 }
 
+$g_db_connection_type = 'Sin Conexión';
+
+function getDBConnectionType() {
+    global $g_db_connection_type;
+    return isset($g_db_connection_type) ? $g_db_connection_type : 'MySQL / MariaDB';
+}
+
 function getSystemEnvVars() {
     $vars = [];
+
+    $env_paths = [__DIR__ . '/.env', __DIR__ . '/../.env'];
+    foreach ($env_paths as $env_file) {
+        if (@file_exists($env_file)) {
+            $lines = @file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            if (is_array($lines)) {
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if ($line === '' || strpos($line, '#') === 0) continue;
+                    $parts = explode('=', $line, 2);
+                    if (count($parts) === 2) {
+                        $k = trim($parts[0]);
+                        $v = trim(trim($parts[1]), '"\'');
+                        if (!isset($vars[$k])) $vars[$k] = $v;
+                    }
+                }
+            }
+        }
+    }
 
     if (@file_exists('/proc/self/environ')) {
         $raw = @file_get_contents('/proc/self/environ');
@@ -613,7 +634,7 @@ function getSystemEnvVars() {
             foreach ($lines as $l) {
                 $p = explode('=', $l, 2);
                 if (count($p) === 2 && !empty($p[0])) {
-                    $vars[$p[0]] = $p[1];
+                    if (!isset($vars[$p[0]])) $vars[$p[0]] = $p[1];
                 }
             }
         }
@@ -632,11 +653,11 @@ function getSystemEnvVars() {
     }
 
     $keys = [
-        'MYSQLHOST', 'MYSQL_HOST', 'RAILWAY_MYSQL_HOST', 'MYSQLPUBLICPORT',
-        'MYSQLUSER', 'MYSQL_USER', 'RAILWAY_MYSQL_USER',
-        'MYSQLPASSWORD', 'MYSQL_PASSWORD', 'MYSQL_ROOT_PASSWORD',
-        'MYSQLDATABASE', 'MYSQL_DATABASE',
-        'MYSQLPORT', 'MYSQL_PORT',
+        'MYSQLHOST', 'MYSQL_HOST', 'RAILWAY_MYSQL_HOST', 'DB_HOST', 'DATABASE_HOST',
+        'MYSQLUSER', 'MYSQL_USER', 'RAILWAY_MYSQL_USER', 'DB_USER', 'DATABASE_USER',
+        'MYSQLPASSWORD', 'MYSQL_PASSWORD', 'MYSQL_ROOT_PASSWORD', 'DB_PASSWORD', 'DB_PASS', 'DATABASE_PASSWORD',
+        'MYSQLDATABASE', 'MYSQL_DATABASE', 'DB_NAME', 'DB_DATABASE', 'DATABASE_NAME',
+        'MYSQLPORT', 'MYSQL_PORT', 'DB_PORT', 'DATABASE_PORT',
         'MYSQL_URL', 'MYSQLURL', 'DATABASE_URL', 'RAILWAY_DATABASE_URL'
     ];
     foreach ($keys as $k) {
@@ -654,6 +675,8 @@ function getSystemEnvVars() {
 }
 
 function getDBConnection() {
+    global $g_db_connection_type;
+
     if (function_exists('mysqli_report')) {
         @mysqli_report(MYSQLI_REPORT_OFF);
     }
@@ -680,20 +703,27 @@ function getDBConnection() {
         }
     }
 
+    if (!empty($env['DB_HOST'])) $hosts[] = $env['DB_HOST'];
     if (!empty($env['MYSQLHOST'])) $hosts[] = $env['MYSQLHOST'];
     if (!empty($env['MYSQL_HOST'])) $hosts[] = $env['MYSQL_HOST'];
     if (!empty($env['RAILWAY_MYSQL_HOST'])) $hosts[] = $env['RAILWAY_MYSQL_HOST'];
 
+    if (!empty($env['DB_USER'])) $users[] = $env['DB_USER'];
     if (!empty($env['MYSQLUSER'])) $users[] = $env['MYSQLUSER'];
     if (!empty($env['MYSQL_USER'])) $users[] = $env['MYSQL_USER'];
 
+    if (!empty($env['DB_PASSWORD'])) $passes[] = $env['DB_PASSWORD'];
+    if (!empty($env['DB_PASS'])) $passes[] = $env['DB_PASS'];
     if (!empty($env['MYSQLPASSWORD'])) $passes[] = $env['MYSQLPASSWORD'];
     if (!empty($env['MYSQL_PASSWORD'])) $passes[] = $env['MYSQL_PASSWORD'];
     if (!empty($env['MYSQL_ROOT_PASSWORD'])) $passes[] = $env['MYSQL_ROOT_PASSWORD'];
 
+    if (!empty($env['DB_NAME'])) $dbs[] = $env['DB_NAME'];
+    if (!empty($env['DB_DATABASE'])) $dbs[] = $env['DB_DATABASE'];
     if (!empty($env['MYSQLDATABASE'])) $dbs[] = $env['MYSQLDATABASE'];
     if (!empty($env['MYSQL_DATABASE'])) $dbs[] = $env['MYSQL_DATABASE'];
 
+    if (!empty($env['DB_PORT'])) $ports[] = (int)$env['DB_PORT'];
     if (!empty($env['MYSQLPORT'])) $ports[] = (int)$env['MYSQLPORT'];
     if (!empty($env['MYSQL_PORT'])) $ports[] = (int)$env['MYSQL_PORT'];
 
@@ -731,6 +761,7 @@ function getDBConnection() {
                                 $c = @new mysqli($h, $u, $p, $d, $prt);
                                 if ($c && !$c->connect_error) {
                                     $conn = $c;
+                                    $g_db_connection_type = "MySQL Servidor (Conectado a $d@$h)";
                                     break 5;
                                 }
                             } catch (Throwable $e) {}
@@ -756,6 +787,7 @@ function getDBConnection() {
                                 ]);
                                 if ($pdo) {
                                     $conn = new TokowDBPDO($pdo);
+                                    $g_db_connection_type = "PDO MySQL (Conectado a $d@$h)";
                                     break 5;
                                 }
                             } catch (Throwable $e) {}
@@ -766,9 +798,10 @@ function getDBConnection() {
         }
     }
 
-    // 3. Fallback de Alta Disponibilidad: TokowJSONDB si no hay drivers de C de MySQL instalados en el contenedor
+    // 3. Fallback de Alta Disponibilidad: TokowJSONDB
     if (!$conn) {
         $conn = new TokowJSONDB();
+        $g_db_connection_type = "Archivo JSON (tokow_db.json)";
     }
 
     @$conn->set_charset("utf8mb4");

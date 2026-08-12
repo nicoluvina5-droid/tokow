@@ -336,9 +336,14 @@ $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, u.es_admin, s.estad
 </header>
 
 <main class="wrap" style="margin-top: 32px;">
-  <div style="margin-bottom: 24px;">
-    <h1>Dashboard General de Datos</h1>
-    <p style="color: var(--muted);">Métricas en tiempo real de usuarios, suscripciones y volumen transaccional simulado en Railway.</p>
+  <div style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h1>Dashboard General de Datos</h1>
+      <p style="color: var(--muted);">Métricas en tiempo real de usuarios, suscripciones y volumen transaccional.</p>
+    </div>
+    <div style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 8px 16px; border-radius: 10px; font-size: 13px; color: var(--lavender);">
+      ⚙️ Motor de Base de Datos: <strong style="color: var(--mint);"><?php echo htmlspecialchars(getDBConnectionType()); ?></strong>
+    </div>
   </div>
 
   <?php if (!empty($msg_admin)): ?>

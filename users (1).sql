@@ -230,22 +230,22 @@ CREATE TABLE `suscripciones` (
 -- Estructura de tabla para la tabla `usuarios`
 --
 
-CREATE TABLE `usuarios` (
-  `id` int(11) NOT NULL,
-  `usuario` varchar(20) NOT NULL,
-  `contraseña` varchar(20) NOT NULL
+CREATE TABLE IF NOT EXISTS `usuarios` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `usuario` varchar(50) NOT NULL,
+  `contraseña` varchar(255) NOT NULL,
+  `es_admin` tinyint(1) DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `usuario` (`usuario`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Volcado de datos para la tabla `usuarios`
+-- Volcado de datos inicial para la tabla `usuarios`
 --
 
-INSERT INTO `usuarios` (`id`, `usuario`, `contraseña`) VALUES
-(1, 'leo', 'pan12'),
-(2, 'leo2', 'pan12'),
-(3, 'pan1', '$2y$10$Vma.fpy/QBsqf'),
-(4, 'pan12', '$2y$10$DnEyNx.uxGE05'),
-(5, 'panadero3000', '123');
+INSERT INTO `usuarios` (`id`, `usuario`, `contraseña`, `es_admin`) VALUES
+(1, 'admin', '$2y$10$wE6vY/8eD9Xk6zY4F1cQ7.u8R6/tJ3.Oa8M8p1.Z2p3Q4R5S6T7U8', 1)
+ON DUPLICATE KEY UPDATE `es_admin` = 1;
 
 --
 -- Índices para tablas volcadas
