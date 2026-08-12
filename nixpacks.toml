@@ -1,0 +1,8 @@
+[providers]
+providers = ["php"]
+
+[phases.setup]
+nixPkgs = ["php82", "php82Extensions.pdo_mysql", "php82Extensions.mysqli", "php82Extensions.pdo", "php82Extensions.json", "php82Extensions.session"]
+
+[variables]
+NIXPACKS_PHP_EXTENSIONS = "pdo, pdo_mysql, mysqli, json, session, mbstring"
