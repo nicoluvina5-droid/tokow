@@ -12,4 +12,9 @@ COPY . /var/www/html/
 # Configurar permisos
 RUN chown -R www-data:www-data /var/www/html
 
-EXPOSE 80
+# Configurar Apache para adaptarse al puerto dinámico $PORT asignado por Railway
+RUN sed -i 's/80/${PORT}/g' /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf
+
+ENV PORT=80
+
+CMD ["apache2-foreground"]
