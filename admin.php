@@ -105,9 +105,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_admin'])) {
             $error_admin = "El ID de usuario y nombre son obligatorios.";
         }
     } elseif ($action === 'delete_user' && $target_user_id) {
-        @$conn->query("DELETE FROM suscripciones WHERE id_usuario = $target_user_id");
-        @$conn->query("DELETE FROM usuarios WHERE id = $target_user_id");
-        $msg_admin = "Usuario ID #$target_user_id eliminado correctamente.";
+        if ($target_user_id === $usuario_id) {
+            $error_admin = "No puedes eliminar tu propia cuenta mientras estás con la sesión activa.";
+        } else {
+            @$conn->query("DELETE FROM pagos WHERE id_suscripcion IN (SELECT id_suscripcion FROM suscripciones WHERE id_usuario = $target_user_id)");
+            @$conn->query("DELETE FROM suscripciones WHERE id_usuario = $target_user_id");
+            @$conn->query("DELETE FROM biblioteca_usuario WHERE id_usuario = $target_user_id");
+            @$conn->query("DELETE FROM dispositivos WHERE id_usuario = $target_user_id");
+            @$conn->query("DELETE FROM mods_usuario WHERE id_usuario = $target_user_id");
+            @$conn->query("DELETE FROM partidas_guardadas WHERE id_usuario = $target_user_id");
+            @$conn->query("DELETE FROM sesiones_juego WHERE id_usuario = $target_user_id");
+            
+            $res_del = @$conn->query("DELETE FROM usuarios WHERE id = $target_user_id");
+            if ($res_del) {
+                $msg_admin = "Usuario ID #$target_user_id eliminado correctamente.";
+            } else {
+                $error_admin = "No se pudo eliminar el usuario ID #$target_user_id de la base de datos.";
+            }
+        }
     } elseif ($action === 'grant_premium' && $target_user_id) {
         $id_plan = 2;
         @$conn->query("UPDATE suscripciones SET estado = 'Expirada' WHERE id_usuario = $target_user_id");

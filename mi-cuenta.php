@@ -30,15 +30,14 @@ $es_admin = ($user_lower === 'admin' || $user_lower === 'leo' || (isset($_SESSIO
 
 // Procesar eliminación de cuenta enviada por el propio usuario cliente
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_account']) && $_POST['action_account'] === 'delete_my_account') {
+    @$conn->query("DELETE FROM pagos WHERE id_suscripcion IN (SELECT id_suscripcion FROM suscripciones WHERE id_usuario = $usuario_id)");
     @$conn->query("DELETE FROM suscripciones WHERE id_usuario = $usuario_id");
-    $stmt_del = @$conn->prepare("DELETE FROM usuarios WHERE id = ?");
-    if ($stmt_del) {
-        $stmt_del->bind_param("i", $usuario_id);
-        $stmt_del->execute();
-        $stmt_del->close();
-    } else {
-        @$conn->query("DELETE FROM usuarios WHERE id = $usuario_id");
-    }
+    @$conn->query("DELETE FROM biblioteca_usuario WHERE id_usuario = $usuario_id");
+    @$conn->query("DELETE FROM dispositivos WHERE id_usuario = $usuario_id");
+    @$conn->query("DELETE FROM mods_usuario WHERE id_usuario = $usuario_id");
+    @$conn->query("DELETE FROM partidas_guardadas WHERE id_usuario = $usuario_id");
+    @$conn->query("DELETE FROM sesiones_juego WHERE id_usuario = $usuario_id");
+    @$conn->query("DELETE FROM usuarios WHERE id = $usuario_id");
 
     // Destruir sesión y limpiar cookies
     $_SESSION = array();
