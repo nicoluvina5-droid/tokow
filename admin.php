@@ -147,9 +147,16 @@ $res_ultimos_pagos = @$conn->query("SELECT p.*, s.id_usuario, u.usuario, pl.nomb
 
 $res_lista_usuarios = @$conn->query("SELECT u.id, u.usuario, u.es_admin, s.estado as sub_estado, pl.nombre as plan_nombre, s.fecha_fin 
     FROM usuarios u 
-    LEFT JOIN suscripciones s ON u.id = s.id_usuario AND s.estado = 'Activa' 
+    LEFT JOIN (
+        SELECT s1.* FROM suscripciones s1
+        INNER JOIN (
+            SELECT id_usuario, MAX(id_suscripcion) as max_id 
+            FROM suscripciones 
+            WHERE estado = 'Activa' 
+            GROUP BY id_usuario
+        ) s2 ON s1.id_suscripcion = s2.max_id
+    ) s ON u.id = s.id_usuario 
     LEFT JOIN planes pl ON s.id_plan = pl.id_plan 
-    GROUP BY u.id
     ORDER BY u.id DESC");
 ?>
 <!doctype html>
